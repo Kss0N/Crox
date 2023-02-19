@@ -1,0 +1,111 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Header Files\framework">
+      <UniqueIdentifier>{e978df81-4e68-498b-9271-537e6ede919b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\impementations">
+      <UniqueIdentifier>{99ed4556-1599-48d9-ad73-09b759a2bfc5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\external">
+      <UniqueIdentifier>{71ca7ef6-6457-4bb2-9956-6b7613574247}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\platform">
+      <UniqueIdentifier>{d1c14016-b129-431a-807f-f9e1dec27588}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shader">
+      <UniqueIdentifier>{e6400632-4fae-46a2-8088-e151cc4ea213}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="nuklear_impl.c">
+      <Filter>Source Files\impementations</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\hashmap.c">
+      <Filter>Source Files\external</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\stb_vorbis.c">
+      <Filter>Source Files\external</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\xml.c">
+      <Filter>Source Files\external</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\cJSON.c">
+      <Filter>Source Files\external</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\cJSON_Utils.c">
+      <Filter>Source Files\external</Filter>
+    </ClCompile>
+    <ClCompile Include="platform\win32.c">
+      <Filter>Source Files\platform</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\gl.c">
+      <Filter>Source Files\external</Filter>
+    </ClCompile>
+    <ClCompile Include="..\externals\wgl.c">
+      <Filter>Source Files\external</Filter>
+    </ClCompile>
+    <ClCompile Include="Crox.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="stb_impl.c">
+      <Filter>Source Files\impementations</Filter>
+    </ClCompile>
+    <ClCompile Include="vulkan_impl.cpp">
+      <Filter>Source Files\impementations</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="framework_nuklear.h">
+      <Filter>Header Files\framework</Filter>
+    </ClInclude>
+    <ClInclude Include="framework_winapi.h">
+      <Filter>Header Files\framework</Filter>
+    </ClInclude>
+    <ClInclude Include="framework_crt.h">
+      <Filter>Header Files\framework</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Crox.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Platform\Platform.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="framework_vulkan.h">
+      <Filter>Header Files\framework</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Crox.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="opengl.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="default.vert">
+      <Filter>Shader</Filter>
+    </None>
+    <None Include="default.frag">
+      <Filter>Shader</Filter>
+    </None>
+  </ItemGroup>
+</Project>
