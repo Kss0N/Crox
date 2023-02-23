@@ -99,6 +99,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>%VULKAN_SDK%\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opengl32.lib;shaderc.lib;shaderc_combined.lib;shaderc_util.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -118,6 +119,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>%VULKAN_SDK%\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opengl32.lib;shaderc.lib;shaderc_combined.lib;shaderc_util.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -132,7 +134,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opengl32.lib;shaderc.lib;shaderc_combined.lib;shaderc_util.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>%VULKAN_SDK%\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -152,13 +154,14 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opengl32.lib;shaderc.lib;shaderc_combined.lib;shaderc_util.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>%VULKAN_SDK%\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\externals\cJSON.c" />
     <ClCompile Include="..\externals\cJSON_Utils.c" />
+    <ClCompile Include="..\externals\cwalk.c" />
     <ClCompile Include="..\externals\gl.c" />
     <ClCompile Include="..\externals\hashmap.c" />
     <ClCompile Include="..\externals\stb_vorbis.c" />
@@ -169,13 +172,16 @@
     <ClCompile Include="platform\win32.c" />
     <ClCompile Include="stb_impl.c" />
     <ClCompile Include="vulkan_impl.cpp" />
+    <ClCompile Include="wavefront.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Crox.h" />
     <ClInclude Include="framework_crt.h" />
     <ClInclude Include="framework_nuklear.h" />
+    <ClInclude Include="framework_spirv.h" />
     <ClInclude Include="framework_vulkan.h" />
     <ClInclude Include="framework_winapi.h" />
+    <ClInclude Include="mesh.h" />
     <ClInclude Include="Platform\Platform.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
@@ -186,8 +192,26 @@
     <Image Include="opengl.ico" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="3D.frag" />
+    <None Include="3D.vert" />
+    <None Include="cube.mtl" />
     <None Include="default.frag" />
     <None Include="default.vert" />
+    <None Include="monkey.mtl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Object Include="cube.obj">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </Object>
+    <Object Include="monkey.obj">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </Object>
+    <Object Include="teapot.obj">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </Object>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

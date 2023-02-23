@@ -404,6 +404,90 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 	struct nk_context* ctx = GetWindowLongPtr(hWnd, GWLP_USERDATA);
 	switch (msg)
 	{
+	case WM_MOUSEMOVE: {
+
+		break;
+	}
+	case WM_KEYDOWN: {
+
+
+		break;
+	}
+	case WM_CHAR: {
+		TCHAR key = (TCHAR)wParam;
+
+		
+		WORD flags = HIWORD(lParam);
+		WORD scanCode = LOBYTE(flags);
+		BOOL isExtended = (flags & KF_EXTENDED) == KF_EXTENDED;
+
+		if (isExtended)
+			scanCode = MAKEWORD(scanCode, 0xE0);
+
+		BOOL isDown = (flags & KF_REPEAT) == KF_REPEAT;
+		WORD repeatCount = LOWORD(lParam);
+		BOOL isReleased = (flags & KF_UP) == KF_UP;
+		BOOL isSystem = (flags & KF_ALTDOWN) == KF_ALTDOWN;
+
+		nk_input_char(ctx, key);
+
+
+		break;
+	}
+
+	case WM_MOUSEWHEEL: {	
+		DWORD xPos = GET_X_LPARAM(lParam);
+		DWORD yPos = GET_Y_LPARAM(lParam);
+
+		WORD keys = GET_KEYSTATE_WPARAM(wParam);
+		if (keys & MK_CONTROL)
+		{
+			nk_input_key(ctx, NK_KEY_CTRL, TRUE);
+		}
+		if (keys & MK_SHIFT)
+		{
+			nk_input_key(ctx, NK_KEY_SHIFT, TRUE);
+		}
+
+
+		if (keys & MK_LBUTTON)
+		{
+			//Left Mouse button
+			nk_input_button(ctx, NK_BUTTON_LEFT, xPos, yPos, TRUE);
+		}
+		if (keys & MK_MBUTTON)
+		{
+			// Middle Mouse button is down
+			nk_input_button(ctx, NK_BUTTON_MIDDLE, xPos, yPos, TRUE);
+		}
+		if (keys & MK_RBUTTON)
+		{
+			//Right Mouse button is down
+			nk_input_button(ctx, NK_BUTTON_RIGHT, xPos, yPos, TRUE);
+		}
+		
+		if (keys & MK_XBUTTON1)
+		{
+			//First eXtension Button (forward navigation)
+			nk_input_button(ctx, NK_BUTTON_EX1, xPos, yPos, TRUE);
+		}
+		if (keys & MK_XBUTTON2)
+		{
+			//Second eX tension button (backward navigation)
+			nk_input_button(ctx, NK_BUTTON_EX2, xPos, yPos, TRUE);
+		}
+
+		short zDelta = GET_WHEEL_DELTA_WPARAM(wParam)/WHEEL_DELTA;
+		
+		nk_input_scroll(ctx, (struct nk_vec2) { .x = 0, .y = zDelta });
+
+		break;
+	}
+
+	
+
+
+
 	case WM_DESTROY:
 	{
 		PostQuitMessage(0);

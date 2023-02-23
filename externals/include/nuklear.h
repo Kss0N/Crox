@@ -791,6 +791,11 @@ enum nk_buttons {
 	NK_BUTTON_MIDDLE,
 	NK_BUTTON_RIGHT,
 	NK_BUTTON_DOUBLE,
+
+	// Extended behavior
+	NK_BUTTON_EX1,	//XBUTTON1
+	NK_BUTTON_EX2,	//XBUTTON2
+
 	NK_BUTTON_MAX
 };
 /*/// #### nk_input_begin
