@@ -106,6 +106,18 @@ struct Vertex* wavefront_read(_In_ FILE* file)
 				{
 
 				}
+				else if (result = sscanf_s(it, "%d/%d", &ixG, &ixT))
+				{
+
+				}
+				else if (result = sscanf_s(it, "%d//%d", &ixG, &ixN))
+				{
+
+				}
+				else
+				{
+					isError = true;
+				}
 
 				assert(ixG != 0);
 
