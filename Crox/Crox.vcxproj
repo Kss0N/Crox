@@ -198,14 +198,14 @@
     <None Include="cube.mtl" />
     <None Include="default.frag" />
     <None Include="default.vert" />
-    <None Include="monkey.mtl" />
+    <None Include="Suzanne.mtl" />
   </ItemGroup>
   <ItemGroup>
     <Object Include="cube.obj">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </Object>
-    <Object Include="monkey.obj">
+    <Object Include="Suzanne.obj">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </Object>

@@ -66,7 +66,7 @@ struct WavefrontData
 {
 	struct Wavefront* meshes;	// stb_ds array
 
-	const char* mtllibs;		// stb_ds array of mtllibs used
+	const char* mtllibs;		// stb_ds array of mtllib paths used
 
 };
 

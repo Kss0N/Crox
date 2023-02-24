@@ -85,6 +85,7 @@ struct WavefrontMesh wavefront_read(_In_ FILE* file)
 
 				break;
 			}
+			continue;
 		}
 		char* it = line;
 
@@ -108,21 +109,13 @@ struct WavefrontMesh wavefront_read(_In_ FILE* file)
 
 				int result;
 				if (result = sscanf_s(it, "%d/%d/%d", &ixG, &ixT, &ixN))
-				{
-					
-				}
-				else if (result = sscanf_s(it, "%d", &ixG))
-				{
-
-				}
+					assert(result != EOF);
 				else if (result = sscanf_s(it, "%d/%d", &ixG, &ixT))
-				{
-
-				}
+					assert(result != EOF);
+				else if (result = sscanf_s(it, "%d", &ixG))
+					assert(result != EOF);
 				else if (result = sscanf_s(it, "%d//%d", &ixG, &ixN))
-				{
-
-				}
+					assert(result != EOF);
 				else
 				{
 					isError = true;

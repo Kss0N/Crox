@@ -28,6 +28,12 @@
     <Filter Include="Shader Files">
       <UniqueIdentifier>{e6400632-4fae-46a2-8088-e151cc4ea213}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resource Files\Mesh">
+      <UniqueIdentifier>{f3a1a64d-ad46-4911-8955-63e86928df9a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\Mesh\Wavefront">
+      <UniqueIdentifier>{0e005a3c-81b1-4fb2-8b80-0f7328fe59db}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="nuklear_impl.c">
@@ -101,6 +107,9 @@
     <ClInclude Include="mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="wavefront.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Crox.rc">
@@ -119,28 +128,28 @@
     <None Include="default.frag">
       <Filter>Shader Files</Filter>
     </None>
-    <None Include="cube.mtl">
-      <Filter>Resource Files</Filter>
-    </None>
     <None Include="3D.vert">
       <Filter>Shader Files</Filter>
     </None>
     <None Include="3D.frag">
       <Filter>Shader Files</Filter>
     </None>
-    <None Include="monkey.mtl">
-      <Filter>Resource Files</Filter>
+    <None Include="cube.mtl">
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    </None>
+    <None Include="Suzanne.mtl">
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
     <Object Include="cube.obj">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
     </Object>
-    <Object Include="monkey.obj">
-      <Filter>Resource Files</Filter>
+    <Object Include="Suzanne.obj">
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
     </Object>
     <Object Include="teapot.obj">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
     </Object>
   </ItemGroup>
 </Project>

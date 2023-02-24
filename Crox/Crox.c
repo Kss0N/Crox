@@ -270,110 +270,6 @@ void GLAD_API_PTR GLDebugProc(
 
 
 
-float triangle[] = {
-/*	X		Y	Z		R	G	B	*/
-	0,	   .5,	0,		1,	0,	0,
-	-.5, -.25,	0,		0,	1,	0,
-	.5,	 -.25,	0,		0,	0,	1,
-};
-void triangletest() 
-{
-	GLuint program = glCreateProgram();
-	NAME_OBJECT(GL_PROGRAM, program, "Default Progam");
-
-	GLuint vao = 0;
-	glCreateVertexArrays(1, &vao);
-	NAME_OBJECT(GL_VERTEX_ARRAY, vao, "triangle Vertex Array");
-
-	GLuint
-		vbo = 0,
-		ebo = 0;
-	glCreateBuffers(1, &ebo);
-	NAME_OBJECT(GL_BUFFER, ebo, "Unused Element Buffer");
-
-	glCreateBuffers(1, &vbo);
-	NAME_OBJECT(GL_BUFFER, vbo, "<Triangle Vertex Buffer>");
-
-	uint32_t ixBind = 0;
-
-	glNamedBufferData(vbo, sizeof triangle, NULL, GL_STATIC_DRAW);
-	glNamedBufferSubData(vbo, 0L, sizeof triangle, triangle);
-
-	glVertexArrayVertexBuffer(vao, ixBind, vbo, 0L, 6 * sizeof(float));
-
-	//Position (location = 0)
-	glVertexArrayAttribBinding(vao, 0, ixBind);
-	glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0L);
-	glEnableVertexArrayAttrib(vao, 0);
-
-	//RGB (location = 1)
-	glVertexArrayAttribBinding(vao, 1, ixBind);
-	glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
-	glEnableVertexArrayAttrib(vao, 1);
-
-	//Make Triangle Shader
-	{
-		GLuint
-			vShader = makeShader(GL_VERTEX_SHADER, "default.vert"),
-			fShader = makeShader(GL_FRAGMENT_SHADER, "default.frag");
-		assert(vShader != 0);
-		assert(fShader != 0);
-
-		glAttachShader(program, vShader);
-		glAttachShader(program, fShader);
-
-		glLinkProgram(program);
-
-		GLint isLinked = false;
-		glGetProgramiv(program, GL_LINK_STATUS, &isLinked);
-#ifndef glDebugMessageCallback
-		if (!isLinked)
-		{
-			GLuint len = 0;
-			glGetProgramiv(program, GL_INFO_LOG_LENGTH, &len);
-			assert(len != 0);
-			const char* msg = malloc(len * sizeof * msg);
-			glGetProgramInfoLog(program, len, NULL, msg);
-
-			OutputDebugStringA(msg);
-			free(msg);
-		}
-#endif // !glDebugMessageCallback
-		if (!isLinked)
-		{
-			glDeleteProgram(program);
-			return -1;
-		}
-
-		// Always delete after successful linkage
-		glDetachShader(program, vShader);
-		glDeleteShader(vShader);
-		glDetachShader(program, fShader);
-		glDeleteShader(fShader);
-	}
-
-	//loop
-
-	struct Camera cam = { 0 };
-	glUseProgram(program);
-	//update matrix uniform by multiplying camera's projection*view matrix * model's matrix (=E)
-	{
-		GLuint matrixLocation = glGetUniformLocation(program, "u_matrix");
-		//model matrix
-		mat4 matrix;
-		mat4x4_mul(matrix, cam.matrix, mat4x4_identity(matrix));
-		glProgramUniformMatrix4fv(program, matrixLocation, 1, GL_FALSE, matrix);
-	}
-	glBindVertexArray(vao);
-	glDrawArrays(GL_TRIANGLES, 0, 3);
-
-	//Cleanup
-	glDeleteBuffers(1, &vbo);
-	glDeleteBuffers(1, &ebo);
-	glDeleteVertexArrays(1, &vao);
-	glDeleteProgram(program);
-}
-
 static inline GLuint activate(GLuint program)
 {
 	static GLuint activeProgram = 0;
@@ -463,7 +359,7 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	//Read <cube.obj> into vbo
 	{
 		FILE* file;
-		fopen_s(&file, "monkey.obj", "r");
+		fopen_s(&file, "Suzanne.obj", "r");
 		assert(file != NULL);
 
 		struct WavefrontMesh mesh = wavefront_read(file);
@@ -584,6 +480,7 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 		assert(swapSuccess);
 	}
 
+	glDeleteBuffers(1, &ebo);
 	glDeleteBuffers(1, &vbo);
 	glDeleteVertexArrays(1, &vao);
 	glDeleteProgram(program);
