@@ -11,6 +11,7 @@
 #include <assert.h>
 
 #include "framework_winapi.h"
+#include "wavefront.h"
 
 
 struct WavefrontItems
@@ -18,9 +19,17 @@ struct WavefrontItems
 	/*stb_ds*/ struct Vertex* vertices;
 };
 
+
+struct IndexChunk
+{
+	uint32_t ixG;
+	uint32_t ixT;
+	uint32_t ixN;
+};
+
 struct IndexKV
 {
-	uint32_t key[3];	//Chunk
+	struct IndexChunk key;	//Chunk
 	uint32_t value;		//Vertex index
 };
 
@@ -34,7 +43,7 @@ struct IndexKV
 	@param file - containing content to be read.
 	@returns    - stb ds Vertex AOS and indices. Indices are ONLY triangles 
 **/
-struct Vertex* wavefront_read(_In_ FILE* file)
+struct WavefrontMesh wavefront_read(_In_ FILE* file)
 {
 	vec3* geometries	= NULL; // 3 values per geometry
 	vec2* textures		= NULL; // 3 values per texture
@@ -84,14 +93,14 @@ struct Vertex* wavefront_read(_In_ FILE* file)
 		{
 
 		// Faces
-		case 'f':	// TODO: 1) indices, 2) polygon triangulation
+		case 'f':	// TODO: polygon triangulation
 		{
-			struct Vertex v;
-			memset(&v, 0, sizeof v);
 
 			for (uint32_t i = 0; i < 3; i++)
 			{
 				it = strchr(it, ' ')+1;
+
+				
 
 				int ixG = 0;
 				int ixT = 0;
@@ -125,26 +134,44 @@ struct Vertex* wavefront_read(_In_ FILE* file)
 				ixT = ixT < 0 ? arrlen(textures) - ixT : ixT;
 				ixN = ixN < 0 ? arrlen(normals) - ixN : ixN;
 
-				if (ixG)
-					memcpy_s(
-						v.pos, sizeof(vec3),
-						&geometries[ixG-1], GEOM_ELEM_SIZE * sizeof(float));
-				else memset(v.pos, 0, sizeof(vec3)); // It's illegal for a face to not have a geometrical position
+				struct IndexChunk chunk = { ixG,ixT, ixN };
 
-				if (ixT)
-					memcpy_s(
-						v.texcoord0, sizeof(vec2),
-						&textures[ixT-1], TEXT_ELEM_SIZE * sizeof(float));
-				else memset(v.texcoord0, 0, sizeof(vec2));
+				uint32_t index;
 
-				if (ixN)
-					memcpy_s(
-						v.normal, sizeof(vec3),
-						&normals[ixN-1], NORM_ELEM_SIZE * sizeof(float));
-				else memset(v.normal, 0, sizeof(vec3));
+				if (hmgeti(indexTable, chunk) != -1) // chunk already exists
+					index = hmget(indexTable, chunk);
+				else
+				{
+					//Append new vertex to the list,
+					//Put it's index into the table
+					struct Vertex v;
+					memset(&v, 0, sizeof v);
 
+					if (ixG)
+						memcpy_s(
+							v.pos, sizeof(vec3),
+							&geometries[ixG - 1], GEOM_ELEM_SIZE * sizeof(float));
+					else memset(v.pos, 0, sizeof(vec3)); // It's illegal for a face to not have a geometrical position
 
-				arrput(vertices, v);
+					if (ixT)
+						memcpy_s(
+							v.texcoord0, sizeof(vec2),
+							&textures[ixT - 1], TEXT_ELEM_SIZE * sizeof(float));
+					else memset(v.texcoord0, 0, sizeof(vec2));
+
+					if (ixN)
+						memcpy_s(
+							v.normal, sizeof(vec3),
+							&normals[ixN - 1], NORM_ELEM_SIZE * sizeof(float));
+					else memset(v.normal, 0, sizeof(vec3));
+
+					arrput(vertices, v);
+					index = arrlenu(vertices) - 1;
+
+					hmput(indexTable, chunk, index);
+				}
+
+				arrput(indices, index);
 			}
 
 
@@ -230,11 +257,25 @@ struct Vertex* wavefront_read(_In_ FILE* file)
 	}
 
 	free(lineBuf);
+	hmfree(indexTable);
 	arrfree(geometries);
 	arrfree(textures);
 	arrfree(normals);
 	hmfree(indexTable);
 
+	struct WavefrontMesh mesh = {
+		.vertices = vertices,
+		.indices = indices,
+		.mtlName = NULL, //TODO;
+		.objName = NULL, //TODO
+	};
 
-	return vertices;
+	return mesh;
+}
+
+
+struct WavefrontMtllibKV* wavefront_mtl_read(FILE* file)
+{
+	const a = sizeof(struct WavefrontMtl);
+	return NULL;
 }

@@ -3,6 +3,7 @@
 #include "framework_crt.h"
 #include "framework_spirv.h"
 #include "mesh.h"
+#include "wavefront.h"
 
 #include <glad/gl.h>
 #include <glad/wgl.h>
@@ -446,27 +447,41 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	assert(vao != 0);
 
 	uint32_t vertexCount;
+	uint32_t indexCount;
 
 	GLuint vbo;
 	glCreateBuffers(1, &vbo);
 	NAME_OBJECT(GL_BUFFER, vbo, "<Cube Buffer>");
 	assert(vbo != 0);
+
+	GLuint ebo;
+	glCreateBuffers(1, &ebo);
+	NAME_OBJECT(GL_BUFFER, ebo, "<Mesh Indices>");
+	assert(ebo != 0);
+
+	assert(vbo != 0);
 	//Read <cube.obj> into vbo
 	{
 		FILE* file;
-		fopen_s(&file, "teapot.obj", "r");
+		fopen_s(&file, "monkey.obj", "r");
 		assert(file != NULL);
 
-		struct Vertex* vertices = wavefront_read(file);
-		vertexCount = arrlen(vertices);
+		struct WavefrontMesh mesh = wavefront_read(file);
+		vertexCount = arrlen(mesh.vertices);
+		indexCount = arrlen(mesh.indices);
 		fclose(file);
 
-		assert(vertices != NULL);
+		assert(mesh.vertices != NULL);
 		assert(vertexCount != 0);
 
 		glNamedBufferData(vbo,			sizeof(struct Vertex) * vertexCount,	NULL, GL_STATIC_DRAW);
-		glNamedBufferSubData(vbo, 0L,	sizeof(struct Vertex)*vertexCount,		vertices);
-		arrfree(vertices);
+		glNamedBufferSubData(vbo, 0L,	sizeof(struct Vertex) *vertexCount,		mesh.vertices);
+		
+		glNamedBufferData(ebo, sizeof(uint32_t) * indexCount, NULL, GL_STATIC_DRAW);
+		glNamedBufferSubData(ebo, 0L, sizeof(uint32_t) * indexCount, mesh.indices);
+		
+		arrfree(mesh.vertices);
+		arrfree(mesh.indices);
 	}
 
 	
@@ -475,6 +490,8 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	size_t begin  = 0L;
 	size_t stride = sizeof(struct Vertex);
 	glVertexArrayVertexBuffer(vao, ixBind, vbo, offset, stride);
+
+	glVertexArrayElementBuffer(vao, ebo);
 
 	//layout(location = 0) in vec3 aXYZ
 	glVertexArrayAttribBinding(vao, 0, ixBind);
@@ -558,8 +575,8 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 		glProgramUniformMatrix4fv(program, glGetUniformLocation(program, "u_matrix"), 1, GL_FALSE, matrix);
 	
 		glBindVertexArray(vao);
-		glDrawArrays(GL_TRIANGLES, 0, vertexCount);
-
+		//glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+		glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, NULL);
 
 		glBindVertexArray(0);
 

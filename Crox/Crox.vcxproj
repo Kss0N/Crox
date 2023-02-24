@@ -184,6 +184,7 @@
     <ClInclude Include="mesh.h" />
     <ClInclude Include="Platform\Platform.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="wavefront.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Crox.rc" />
