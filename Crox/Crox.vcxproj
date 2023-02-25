@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -182,6 +182,7 @@
     <ClInclude Include="framework_vulkan.h" />
     <ClInclude Include="framework_winapi.h" />
     <ClInclude Include="mesh.h" />
+    <ClInclude Include="NullSemantics.h" />
     <ClInclude Include="Platform\Platform.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="wavefront.h" />
@@ -190,17 +191,33 @@
     <ResourceCompile Include="Crox.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="biplane\G17SBEEH.JPG" />
+    <Image Include="biplane\G17SBEMS.JPG" />
+    <Image Include="biplane\G17SHELC.JPG" />
+    <Image Include="biplane\G17SHENG.JPG" />
+    <Image Include="biplane\G17SLTRB.JPG" />
+    <Image Include="biplane\G17SLTRR.JPG" />
+    <Image Include="biplane\G17SNUMR.JPG" />
+    <Image Include="biplane\G17SPICF.JPG" />
+    <Image Include="biplane\LAKEREM.JPG" />
     <Image Include="opengl.ico" />
   </ItemGroup>
   <ItemGroup>
     <None Include="3D.frag" />
     <None Include="3D.vert" />
+    <None Include="biplane\biplane.mtl" />
+    <None Include="biplane\G17SL.3ds" />
+    <None Include="biplane\G17SL.MAX" />
     <None Include="cube.mtl" />
     <None Include="default.frag" />
     <None Include="default.vert" />
     <None Include="Suzanne.mtl" />
   </ItemGroup>
   <ItemGroup>
+    <Object Include="biplane\biplane.obj">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </Object>
     <Object Include="cube.obj">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>

@@ -404,7 +404,121 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 	struct nk_context* ctx = GetWindowLongPtr(hWnd, GWLP_USERDATA);
 	switch (msg)
 	{
+	
 	case WM_MOUSEMOVE: {
+
+		DWORD xPos = GET_X_LPARAM(lParam);
+		DWORD yPos = GET_Y_LPARAM(lParam);
+
+		WORD keys = GET_KEYSTATE_WPARAM(wParam);
+		if (keys & MK_CONTROL)
+		{
+			nk_input_key(ctx, NK_KEY_CTRL, TRUE);
+		}
+		if (keys & MK_SHIFT)
+		{
+			nk_input_key(ctx, NK_KEY_SHIFT, TRUE);
+		}
+
+
+		if (keys & MK_LBUTTON)
+		{
+			//Left Mouse button
+			nk_input_button(ctx, NK_BUTTON_LEFT, xPos, yPos, TRUE);
+		}
+		if (keys & MK_MBUTTON)
+		{
+			// Middle Mouse button is down
+			nk_input_button(ctx, NK_BUTTON_MIDDLE, xPos, yPos, TRUE);
+		}
+		if (keys & MK_RBUTTON)
+		{
+			//Right Mouse button is down
+			nk_input_button(ctx, NK_BUTTON_RIGHT, xPos, yPos, TRUE);
+		}
+
+		if (keys & MK_XBUTTON1)
+		{
+			//First eXtension Button (forward navigation)
+			nk_input_button(ctx, NK_BUTTON_EX1, xPos, yPos, TRUE);
+		}
+		if (keys & MK_XBUTTON2)
+		{
+			//Second eX tension button (backward navigation)
+			nk_input_button(ctx, NK_BUTTON_EX2, xPos, yPos, TRUE);
+		}
+
+		nk_input_motion(ctx, xPos, yPos);
+
+		break;
+	}
+
+	case WM_LBUTTONDOWN: case WM_LBUTTONUP:	// Left Mouse button
+	case WM_MBUTTONDOWN: case WM_MBUTTONUP:	// Middle Mouse Button
+	case WM_RBUTTONDOWN: case WM_RBUTTONUP: // Right Mouse button
+	case WM_XBUTTONDOWN: case WM_XBUTTONUP: // eXension Moues  button
+	{
+		DWORD xPos = GET_X_LPARAM(lParam);
+		DWORD yPos = GET_Y_LPARAM(lParam);
+
+		DWORD kfs = GET_KEYSTATE_WPARAM(wParam);
+		
+		nk_input_key(ctx, NK_KEY_CTRL, kfs & MK_CONTROL);
+		nk_input_key(ctx, NK_KEY_SHIFT, kfs & MK_SHIFT);
+		
+		nk_input_button(ctx, NK_BUTTON_LEFT, xPos, yPos, kfs & MK_LBUTTON);
+		nk_input_button(ctx, NK_BUTTON_MIDDLE, xPos, yPos, kfs & MK_MBUTTON);
+		nk_input_button(ctx, NK_BUTTON_RIGHT, xPos, yPos, kfs & MK_RBUTTON);
+		nk_input_button(ctx, NK_BUTTON_EX1, xPos, yPos, kfs & MK_XBUTTON1);
+		nk_input_button(ctx, NK_BUTTON_EX2, xPos, yPos, kfs & MK_XBUTTON2);
+
+	}
+	
+	case WM_MOUSEWHEEL: {
+		DWORD xPos = GET_X_LPARAM(lParam);
+		DWORD yPos = GET_Y_LPARAM(lParam);
+
+		WORD keys = GET_KEYSTATE_WPARAM(wParam);
+		if (keys & MK_CONTROL)
+		{
+			nk_input_key(ctx, NK_KEY_CTRL, TRUE);
+		}
+		if (keys & MK_SHIFT)
+		{
+			nk_input_key(ctx, NK_KEY_SHIFT, TRUE);
+		}
+
+
+		if (keys & MK_LBUTTON)
+		{
+			//Left Mouse button
+			nk_input_button(ctx, NK_BUTTON_LEFT, xPos, yPos, TRUE);
+		}
+		if (keys & MK_MBUTTON)
+		{
+			// Middle Mouse button is down
+			nk_input_button(ctx, NK_BUTTON_MIDDLE, xPos, yPos, TRUE);
+		}
+		if (keys & MK_RBUTTON)
+		{
+			//Right Mouse button is down
+			nk_input_button(ctx, NK_BUTTON_RIGHT, xPos, yPos, TRUE);
+		}
+
+		if (keys & MK_XBUTTON1)
+		{
+			//First eXtension Button (forward navigation)
+			nk_input_button(ctx, NK_BUTTON_EX1, xPos, yPos, TRUE);
+		}
+		if (keys & MK_XBUTTON2)
+		{
+			//Second eX tension button (backward navigation)
+			nk_input_button(ctx, NK_BUTTON_EX2, xPos, yPos, TRUE);
+		}
+
+		short zDelta = GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
+
+		nk_input_scroll(ctx, (struct nk_vec2) { .x = 0, .y = zDelta });
 
 		break;
 	}
@@ -435,54 +549,7 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 		break;
 	}
 
-	case WM_MOUSEWHEEL: {	
-		DWORD xPos = GET_X_LPARAM(lParam);
-		DWORD yPos = GET_Y_LPARAM(lParam);
-
-		WORD keys = GET_KEYSTATE_WPARAM(wParam);
-		if (keys & MK_CONTROL)
-		{
-			nk_input_key(ctx, NK_KEY_CTRL, TRUE);
-		}
-		if (keys & MK_SHIFT)
-		{
-			nk_input_key(ctx, NK_KEY_SHIFT, TRUE);
-		}
-
-
-		if (keys & MK_LBUTTON)
-		{
-			//Left Mouse button
-			nk_input_button(ctx, NK_BUTTON_LEFT, xPos, yPos, TRUE);
-		}
-		if (keys & MK_MBUTTON)
-		{
-			// Middle Mouse button is down
-			nk_input_button(ctx, NK_BUTTON_MIDDLE, xPos, yPos, TRUE);
-		}
-		if (keys & MK_RBUTTON)
-		{
-			//Right Mouse button is down
-			nk_input_button(ctx, NK_BUTTON_RIGHT, xPos, yPos, TRUE);
-		}
-		
-		if (keys & MK_XBUTTON1)
-		{
-			//First eXtension Button (forward navigation)
-			nk_input_button(ctx, NK_BUTTON_EX1, xPos, yPos, TRUE);
-		}
-		if (keys & MK_XBUTTON2)
-		{
-			//Second eX tension button (backward navigation)
-			nk_input_button(ctx, NK_BUTTON_EX2, xPos, yPos, TRUE);
-		}
-
-		short zDelta = GET_WHEEL_DELTA_WPARAM(wParam)/WHEEL_DELTA;
-		
-		nk_input_scroll(ctx, (struct nk_vec2) { .x = 0, .y = zDelta });
-
-		break;
-	}
+	
 
 	
 

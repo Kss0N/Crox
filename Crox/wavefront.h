@@ -3,10 +3,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <linmath.h>
-#include "mesh.h"
-
 #include <stb_image.h>
 #include <stb_ds.h>
+
+#include "mesh.h"
+#include "NullSemantics.h"
+
 
 typedef float* stbi_bmp;
 
@@ -14,7 +16,7 @@ struct WavefrontMesh {
 	struct Vertex* vertices;	// stb_ds array
 	uint32_t* indices;			// stb_ds array
 
-	const char* objName;		
+	const char* name;		
 	const char* mtlName;
 };
 enum WavefrontIlluminationModel {
@@ -32,57 +34,85 @@ enum WavefrontIlluminationModel {
 
 	WAVEFRONT_ILLUMMINATION_MAX_ENUMS
 };
-struct WavefrontMtl {
-
-	union {
-		struct {
-			vec3 ambient;
-			vec3 diffuse;
-			vec3 spectral;
-		};
-		struct {
-			stbi_bmp* ambientMap;
-			stbi_bmp* diffuseMap;
-			stbi_bmp* spectralMap;
-		};
-
-	};
-
-	union {
-		vec3 specular;
-		float alpha;	// in float[0,1] inclusive
-		struct {
-			stbi_bmp* specularAlphaMap; //this map contains specularity on R-channel and transparency on A-channel
-			float saNan; // -value => specular (no bmp), +val => specular + alpha (no bmp), -NaN => Specular  bmp, +NaN => specular+Alpha bmp.
-		};
-	};
-	uint32_t shininess;	// in int[0,1000] inclusive
-	vec3 transFilter;
-	float indexOfRefraction;
+struct WavefrontMtl 
+{
+	vec3 ambient;
+	vec3 diffuse;
+	vec3 specular;
+	float shininess;
+	float alpha;
 	enum WavefrontIlluminationModel model;
 };
 
-struct WavefrontData 
+
+
+
+struct WavefrontGroup
 {
-	struct Wavefront* meshes;	// stb_ds array
-
-	const char* mtllibs;		// stb_ds array of mtllib paths used
-
+	uint32_t ixFirst;	// Index of the first element(AKA index) in the parent WavefrontObj's indices vector.
+	uint32_t count;	// Index of the last element(AKA index) in the parent WavefrontObj's indices vector.
+	char* name;
+	char* mtlName;
 };
+inline void wfDestroyGroup(struct WavefrontGroup* g)
+{
+	if(g->mtlName) _aligned_free(g->mtlName);
+	if (g->name) _aligned_free(g->name);
+}
 
-// str -> WavefrontMtl 
+
+
+struct WavefrontObj 
+{
+	struct Vertex* vertices;	// stb_ds darray
+	uint32_t* indices;
+	struct WavefrontGroup* groups;
+	
+	
+	char* name;
+	char* mtllib;		// mtllib
+};
+inline void wfDestroyObj(struct WavefrontObj* o) 
+{
+	arrfree(o->vertices);
+	arrfree(o->indices);
+	uint32_t groupCount = arrlenu(o->groups);
+	for (uint32_t i = 0; i < groupCount; i++)
+		wfDestroyGroup(&o->groups[i]);
+	if (o->name) _aligned_free(o->name);
+	if (o->mtllib) _aligned_free(o->mtllib);
+}
+
+
+
+struct WavefrontMesh wavefront_read(_In_ FILE* file);
+
+struct WavefrontObj wavefront_obj_read(_In_ FILE* file);
+
+// str -> WavefrontMtl table
 struct WavefrontMtllibKV
 {
 	_Null_terminated_ char* key;
 	struct WavefrontMtl value;
 };
+struct WavefrontMtllib {
+	struct WavefrontMtllibKV* materialMap;	//stb_ds c string map
+	char const** keys;	// stb_ds darray of c strings
+};
+inline void wfDestroyMtllib(struct WavefrontMtllib* mtllib)
+{
+	arrfree(mtllib->keys);
 
-struct WavefrontMesh wavefront_read(_In_ FILE* file);
+	uint32_t keyCount = arrlen(mtllib->materialMap);
+	for (uint32_t i = 0; i < keyCount; i++)
+		_aligned_free(mtllib->keys[i]);
 
+	shfree(mtllib->materialMap);
+}
 
 /**
 	@brief reads 
 	@param   file 
 	@returns stb_ds string->WavefrontMtl hashmap.
 **/
-struct WavefrontMtllibKV* wavefront_mtl_read(_In_ FILE* file);
+struct WavefrontMtllib wavefront_mtl_read(_In_ FILE* file);

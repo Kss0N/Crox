@@ -34,6 +34,9 @@
     <Filter Include="Resource Files\Mesh\Wavefront">
       <UniqueIdentifier>{0e005a3c-81b1-4fb2-8b80-0f7328fe59db}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Resource Files\Mesh\Wavefront\biplane">
+      <UniqueIdentifier>{032f57b2-e875-4a05-96f0-8152e39d5969}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="nuklear_impl.c">
@@ -110,6 +113,9 @@
     <ClInclude Include="wavefront.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="NullSemantics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Crox.rc">
@@ -119,6 +125,33 @@
   <ItemGroup>
     <Image Include="opengl.ico">
       <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="biplane\G17SBEEH.JPG">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </Image>
+    <Image Include="biplane\G17SBEMS.JPG">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </Image>
+    <Image Include="biplane\G17SHELC.JPG">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </Image>
+    <Image Include="biplane\G17SHENG.JPG">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </Image>
+    <Image Include="biplane\G17SLTRB.JPG">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </Image>
+    <Image Include="biplane\G17SLTRR.JPG">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </Image>
+    <Image Include="biplane\G17SNUMR.JPG">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </Image>
+    <Image Include="biplane\G17SPICF.JPG">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </Image>
+    <Image Include="biplane\LAKEREM.JPG">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>
@@ -140,6 +173,15 @@
     <None Include="Suzanne.mtl">
       <Filter>Resource Files\Mesh\Wavefront</Filter>
     </None>
+    <None Include="biplane\biplane.mtl">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </None>
+    <None Include="biplane\G17SL.3ds">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </None>
+    <None Include="biplane\G17SL.MAX">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Object Include="cube.obj">
@@ -150,6 +192,9 @@
     </Object>
     <Object Include="teapot.obj">
       <Filter>Resource Files\Mesh\Wavefront</Filter>
+    </Object>
+    <Object Include="biplane\biplane.obj">
+      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
     </Object>
   </ItemGroup>
 </Project>

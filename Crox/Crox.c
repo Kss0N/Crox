@@ -46,7 +46,10 @@ void setView(struct Camera* cam, vec3 pos, vec3 dir)
 	UPDATE_CAMERA_MATRIX(cam);
 }
 
-
+float toRadians(float deg)
+{
+	return deg * (180.0 / M_PI);
+}
 
 
 #define NAME_OBJECT(type, obj, name) glObjectLabel(type, obj, -(signed)strlen(name),name);
@@ -342,12 +345,9 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	NAME_OBJECT(GL_VERTEX_ARRAY, vao, "<Cube Vertex Array>");
 	assert(vao != 0);
 
-	uint32_t vertexCount;
-	uint32_t indexCount;
-
 	GLuint vbo;
 	glCreateBuffers(1, &vbo);
-	NAME_OBJECT(GL_BUFFER, vbo, "<Cube Buffer>");
+	NAME_OBJECT(GL_BUFFER, vbo, "<Mesh Vertices>");
 	assert(vbo != 0);
 
 	GLuint ebo;
@@ -355,31 +355,96 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	NAME_OBJECT(GL_BUFFER, ebo, "<Mesh Indices>");
 	assert(ebo != 0);
 
-	assert(vbo != 0);
-	//Read <cube.obj> into vbo
+	struct Group {
+		uint32_t ixFirst;
+		uint32_t count;
+
+		struct WavefrontMtl mtl;
+	};
+
+	uint32_t vertexCount;
+	uint32_t indexCount;
+	uint32_t groupCount = 0;
+	struct Group* groups = NULL;
+	
+	struct WavefrontObj object;
+	struct WavefrontMtllib mtllib;
+	bool hasMaterials = false;
+
+	memset(&object, 0, sizeof object);
+	memset(&mtllib, 0, sizeof mtllib);
+
+
+	const char* parentPath = "biplane";
+	const char* objPath = "biplane.obj";
+
+	char* fullPath = malloc(128);
+	cwk_path_join(parentPath, objPath, fullPath, 128);
+
+	FILE* file;
+	fopen_s(&file, fullPath, "r");
+	assert(file != NULL);
+
+	object = wavefront_obj_read(file);
+	fclose(file);
+
+	if (object.mtllib != NULL)
 	{
-		FILE* file;
-		fopen_s(&file, "Suzanne.obj", "r");
+		cwk_path_join(parentPath, object.mtllib, fullPath, 128);
+		fopen_s(&file, fullPath, "r");
 		assert(file != NULL);
+		mtllib = wavefront_mtl_read(file);
+		assert(mtllib.materialMap != NULL);
+		assert(mtllib.keys != NULL);
+		hasMaterials = true;
+	}
+	
+	free(fullPath);
 
-		struct WavefrontMesh mesh = wavefront_read(file);
-		vertexCount = arrlen(mesh.vertices);
-		indexCount = arrlen(mesh.indices);
-		fclose(file);
+	//Read <cube.obj> into vbo and ebo
+	{
+		
+		assert(object.vertices != NULL);
+		assert(object.indices != NULL);
 
-		assert(mesh.vertices != NULL);
-		assert(vertexCount != 0);
+		vertexCount= arrlen(object.vertices);
+		indexCount = arrlen(object.indices);
+		groupCount = arrlen(object.groups);
+
+		for (uint32_t i = 0; i < groupCount; i++)
+		{
+			struct WavefrontGroup group = object.groups[i];
+		
+			
+			struct Group g = {
+				.ixFirst = group.ixFirst,
+				.count = group.count,
+			};
+
+			if (hasMaterials) 
+			{
+				g.mtl = shget(mtllib.materialMap, group.mtlName);
+			}
+				
+			else
+				memset(&g.mtl, 0, sizeof g.mtl);
+
+			arrput(groups, g);
+		}
+
+
 
 		glNamedBufferData(vbo,			sizeof(struct Vertex) * vertexCount,	NULL, GL_STATIC_DRAW);
-		glNamedBufferSubData(vbo, 0L,	sizeof(struct Vertex) *vertexCount,		mesh.vertices);
+		glNamedBufferSubData(vbo, 0L,	sizeof(struct Vertex) * vertexCount,		object.vertices);
 		
-		glNamedBufferData(ebo, sizeof(uint32_t) * indexCount, NULL, GL_STATIC_DRAW);
-		glNamedBufferSubData(ebo, 0L, sizeof(uint32_t) * indexCount, mesh.indices);
+		glNamedBufferData(ebo,			sizeof(uint32_t) * indexCount,			NULL, GL_STATIC_DRAW);
+		glNamedBufferSubData(ebo, 0L,	sizeof(uint32_t) * indexCount,			object.indices);
 		
-		arrfree(mesh.vertices);
-		arrfree(mesh.indices);
+		
 	}
 
+	wfDestroyObj(&object);
+	wfDestroyMtllib(&mtllib);
 	
 	GLuint ixBind = 0;
 	size_t offset = 0L;
@@ -389,12 +454,20 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 
 	glVertexArrayElementBuffer(vao, ebo);
 
-	//layout(location = 0) in vec3 aXYZ
+	// layout(location = 0) in vec3 aXYZ
 	glVertexArrayAttribBinding(vao, 0, ixBind);
-	glVertexArrayAttribFormat (vao, 0, 3, GL_FLOAT, false, begin);
+	glVertexArrayAttribFormat (vao, 0, 3, GL_FLOAT, false, offsetof(struct Vertex, pos));
 	glEnableVertexArrayAttrib (vao, 0);
-	
 
+	// layout(location = 1) in vec3 aIJK
+	glVertexArrayAttribBinding(vao, 1, ixBind);
+	glVertexArrayAttribFormat (vao, 1, 3, GL_FLOAT, false, offsetof(struct Vertex, normal));
+	glEnableVertexArrayAttrib (vao, 1);
+
+	// layout(location = 2) in vec2 aUV
+	glVertexArrayAttribBinding(vao, 2, ixBind);
+	glVertexArrayAttribFormat (vao, 2, 2, GL_FLOAT, false, offsetof(struct Vertex, texcoord0));
+	glEnableVertexArrayAttrib (vao, 2);
 
 	
 
@@ -407,12 +480,15 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	setView(&cam, pos, dir);
 
 
-	
+	bool hasRightClick = false;
+	struct nk_vec2 rightClickOrgin;
 
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 	glClearColor(0, 0, 0, 1.0f);
 
+	vec3 lightPos = { 0, 15, 0 };
+	vec3 lightColor = { 1,1,1 };
 
 	platform_show(ctx);
 	int result = 0;
@@ -424,12 +500,61 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 		if (!running) break; // Avoid swapping deleted buffers
 
 
-		float scrollDelta = ctx->input.mouse.scroll_delta.y;
+		struct nk_mouse mouse = ctx->input.mouse;
+
+		if (mouse.buttons[NK_BUTTON_RIGHT].down)
+		{
+			if (!hasRightClick)
+			{
+				hasRightClick = true;
+				rightClickOrgin = mouse.pos;
+			}
+			else
+			{
+				float dX = mouse.pos.x - rightClickOrgin.x;
+				float dY = mouse.pos.y - rightClickOrgin.y;
+
+				float yaw  = toRadians( 0.001 * (dX ) / width);
+				float pitch= toRadians( 0.001 * (dY ) / height);
+				
+				//vertically:
+				//newDir = rotate(dir, -yaw, |dir x up|) = rotate(-yaw * |dir x up|) * dir
+
+				vec3 right; 
+				mat4 tmpM;
+
+				vec3_norm(right, vec3_mul_cross(right, dir, UP));
+				mat4x4_rotate(tmpM, mat4x4_identity(tmpM), right[0], right[1], right[2], -pitch);
+
+				vec4 newDir;
+				mat4x4_mul_vec4(newDir, tmpM, dir);
+
+				float ang = vec3_angle(newDir, UP);
+				float dAng = vec3_angle(newDir, dir);
+
+				if (fabs(vec3_angle(newDir, UP)) - toRadians(90) <= toRadians(85))
+					vec3_dup(dir, newDir);
+
+				// horizontally:
+				// dir = rotate(dir, -yaw, Up)
+
+				vec4 newDir2;
+				mat4x4_mul_vec4(newDir2, mat4x4_rotate(tmpM, mat4x4_identity(tmpM), UP[0], UP[1], UP[2], -yaw), newDir);
+				vec3_dup(dir, newDir2);
+			}
+		}
+		else
+		{
+			hasRightClick = false;
+		}
+
+		float scrollDelta = mouse.scroll_delta.y;
 		if (scrollDelta)
 		{
 			pos[2] += scrollDelta / 10;
-			setView(&cam, pos, dir);
 		}
+
+
 
 		struct nk_input* in = &ctx->input;
 		for (int i = 0; i < in->keyboard.text_len; i++)
@@ -466,19 +591,49 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 
 		glUseProgram(program);
 	
+		mat4 model;
+		mat4x4_identity(model);
+		glProgramUniformMatrix4fv(program, glGetUniformLocation(program, "u_model"), 1, false, model);
+
 		mat4 matrix;//model matrix
-		mat4x4_mul(matrix, cam.matrix, mat4x4_identity(matrix)); //matrix = cam's matrix * E
-		glProgramUniformMatrix4fv(program, glGetUniformLocation(program, "u_matrix"), 1, GL_FALSE, matrix);
+		mat4x4_mul(matrix, cam.matrix, model); //matrix = cam's matrix * E
+		glProgramUniformMatrix4fv(program, glGetUniformLocation(program, "u_matrix"), 1, false, matrix);
+
+		mat4 normalMatrix; // = mat3(transpose(inverse(model)))
+		mat4x4_transpose(normalMatrix, mat4x4_invert(normalMatrix, model));
+		glProgramUniformMatrix3fv(program, glGetUniformLocation(program, "u_normalMatrix"), 1, false, normalMatrix);
 	
+		glProgramUniform3fv(program, glGetUniformLocation(program, "u_camPos"), 1, pos);
+		glProgramUniform3fv(program, glGetUniformLocation(program, "u_lightPos"), 1, lightPos);
+		glProgramUniform3fv(program, glGetUniformLocation(program, "u_lightColor"), 1, lightColor);
+
 		glBindVertexArray(vao);
 		//glDrawArrays(GL_TRIANGLES, 0, vertexCount);
-		glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, NULL);
+		for (uint32_t i = 0; i < groupCount; i++)
+		{
+			struct Group g = groups[i];
+
+			if (hasMaterials)
+			{
+				glProgramUniform3fv(program, glGetUniformLocation(program, "u_ambientColor"), 1, g.mtl.ambient);
+				glProgramUniform3fv(program, glGetUniformLocation(program, "u_diffuseColor"), 1, g.mtl.diffuse);
+				glProgramUniform3fv(program, glGetUniformLocation(program, "u_specularColor"), 1, g.mtl.specular);
+
+				glProgramUniform1f(program, glGetUniformLocation(program, "u_alpha"), g.mtl.alpha);
+				glProgramUniform1f(program, glGetUniformLocation(program, "u_shininess"), g.mtl.shininess);
+			}
+			
+
+			glDrawElements(GL_TRIANGLES, g.count, GL_UNSIGNED_INT, (void*)(sizeof(uint32_t)* g.ixFirst));
+		}
+		//glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, NULL);
 
 		glBindVertexArray(0);
 
 		BOOL swapSuccess = platform_swapBuffers(ctx);
 		assert(swapSuccess);
 	}
+	arrfree(groups);
 
 	glDeleteBuffers(1, &ebo);
 	glDeleteBuffers(1, &vbo);
