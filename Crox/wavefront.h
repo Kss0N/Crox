@@ -79,8 +79,16 @@ inline void wfDestroyObj(struct WavefrontObj* o)
 	uint32_t groupCount = arrlenu(o->groups);
 	for (uint32_t i = 0; i < groupCount; i++)
 		wfDestroyGroup(&o->groups[i]);
-	if (o->name) _aligned_free(o->name);
-	if (o->mtllib) _aligned_free(o->mtllib);
+	if (o->name)
+	{
+		_aligned_free(o->name);
+		o->name = NULL;
+	}
+	if (o->mtllib) 
+	{
+		_aligned_free(o->mtllib);
+		o->mtllib = NULL;
+	}
 }
 
 
@@ -101,12 +109,12 @@ struct WavefrontMtllib {
 };
 inline void wfDestroyMtllib(struct WavefrontMtllib* mtllib)
 {
+	uint32_t keyCount = arrlenu(mtllib->keys);
+	if (mtllib->keys)
+		for (uint32_t i = 0; i < keyCount; i++)
+			_aligned_free(mtllib->keys[i]);
+	
 	arrfree(mtllib->keys);
-
-	uint32_t keyCount = arrlen(mtllib->materialMap);
-	for (uint32_t i = 0; i < keyCount; i++)
-		_aligned_free(mtllib->keys[i]);
-
 	shfree(mtllib->materialMap);
 }
 

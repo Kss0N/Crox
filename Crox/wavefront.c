@@ -455,11 +455,11 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 			//Vertex Space data (NOT SUPPORTED [FIXME])
 			case 'p': {
 				//TODO
-				BACK_TO_TOP;
+				continue;
 			}
 			default:
 				isError = true;
-				BACK_TO_TOP;
+				continue;
 			}
 			assert(elemCount != PENDING);
 			assert(pList != PENDING_PTR);
@@ -474,12 +474,13 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 					assert(result != EOF);
 				else {
 					isError = true;
-					BACK_TO_TOP;
+					break;
 				}
 				arrput(*pList, value);
 			}
+			if (isError) continue;
 
-			BACK_TO_TOP;
+			break;
 		}
 		
 		case 'g':	//Group specification
@@ -516,9 +517,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 		}
 
 		case '#':	// Ignore comments
-		{
-			break;;
-		}
+			break;
 
 		case 'o':	// Object Name specification
 		{
@@ -538,7 +537,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 			errno_t err = strcpy_s(name, nameLen, it);
 			assert(err == 0);
 
-			BACK_TO_TOP;
+			continue;
 		}
 		
 		default:
@@ -561,7 +560,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 			}
 			else if (startsWith(line, "usemtl"))
 			{
-				if (activeGroup.mtlName) _aligned_free(activeGroup.mtlName); //TODO: (maybe) make it so if a new usemtl statment is encountered without a new group, just create a new group
+				if (activeGroup.mtlName) _aligned_free(activeGroup.mtlName);
 				
 				//Everything after the trailing space is considered the material-name
 				it = strchr(line, ' ') + 1;

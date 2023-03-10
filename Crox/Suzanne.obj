@@ -1,6 +1,6 @@
 # Blender v2.82 (sub 7) OBJ File: ''
 # www.blender.org
-mtllib monkey.mtl
+mtllib Suzanne.mtl
 o Suzanne
 v 0.740392 0.482340 -0.153860
 v 0.381617 0.493946 0.644120

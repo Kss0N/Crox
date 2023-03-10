@@ -5749,6 +5749,11 @@ template<typename T> struct nk_alignof{struct Big {T x; char c;}; enum {
 
 #endif /* NK_NUKLEAR_H_ */
 
+#ifdef __INTELLISENSE__
+#define NK_IMPLEMENTATION
+#endif // __INTELLISENSE__
+
+
 #ifdef NK_IMPLEMENTATION
 
 #ifndef NK_INTERNAL_H

@@ -234,10 +234,9 @@ extern APIENTRY _tWinMain(
 
 	}
 
-
-
 	free(ctx);
 	gladLoaderUnloadGL();
+
 	return result;
 }
 
@@ -554,7 +553,15 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 	
 
 
+	case WM_SIZE:
+	{
+		UINT width = LOWORD(lParam);
+		UINT height = HIWORD(lParam);
 
+		nk_window_set_size(ctx, "Crox", (struct nk_vec2) { .x = width, .y = height });
+
+		break;
+	}
 	case WM_DESTROY:
 	{
 		PostQuitMessage(0);
@@ -563,7 +570,7 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 	default:
 		return DefWindowProc(hWnd, msg, wParam, lParam);
 	}
-	return 0;
+	return 0L;
 }
 
 
@@ -618,3 +625,4 @@ bool platform_pollMessages(_In_ NkContext* ctx, _Out_ int* status)
 
 	return true;
 }
+
