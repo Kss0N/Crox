@@ -349,13 +349,17 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 		assert(obj.vertices != NULL);
 		fclose(file);
 
-		cwk_path_change_basename(p, obj.mtllib, mtllibPath, MAX_PATH);
-		err = fopen_s(&file, mtllibPath, "r");
-		if (err != 0)
-			goto CLEANUP_INVALID;
-		mtllib = wavefront_mtl_read(file);
-		assert(mtllib.keys != NULL);
-		fclose(file);
+		if (obj.mtllib)
+		{
+			cwk_path_change_basename(p, obj.mtllib, mtllibPath, MAX_PATH);
+			err = fopen_s(&file, mtllibPath, "r");
+			if (err != 0)
+				goto CLEANUP_INVALID;
+			mtllib = wavefront_mtl_read(file);
+			assert(mtllib.keys != NULL);
+			fclose(file);
+		}
+		
 
 		if (obj.name)
 		{
@@ -550,6 +554,8 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	arrput(paths, "cube.obj");
 	arrput(paths, "globe.obj");
 	arrput(paths, "Suzanne.obj");
+	arrput(paths, "teapot.obj");
+	
 	
 	
 
@@ -579,6 +585,8 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	
 	mat4x4_translate(meshes[2].matrix, 0, 5, 5);
 	mat4x4_translate(meshes[3].matrix, 0, 0, 10);
+
+	mat4x4_translate(meshes[4].matrix, 15, 0, 0);
 
 	
 	GLuint ixBind = 0;
