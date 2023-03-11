@@ -20,6 +20,28 @@
 
 typedef mat4x4 mat4;
 
+
+#ifdef _DEBUG
+int OutputDebugFormatted(
+	_In_z_ _Printf_format_string_params_(1) const TCHAR* format, ...)
+{
+	TCHAR buffer[4096];
+
+	va_list args;
+	va_start(args, format);
+
+	int result = _vstprintf(buffer, 1024, format, args);
+	if (result != 0)
+	{
+		OutputDebugString(buffer);
+	}
+	va_end(args);
+	return result;
+}
+#else
+#define OutputDebugFormatted(f, ...)
+#endif // _DEBUG
+
 struct Camera 
 {
 //plz don't modify directly
@@ -313,7 +335,18 @@ void destroy_mesh(struct mesh* m)
 }
 
 
+
+
+
+
 _Check_return_ _Success_(return != NULL)
+/**
+	@brief  Creates a stb_ds darray of meshes read from the paths. All vertex data and index data will be stored sequencialy in the vbo and ebo supplied as parameter.
+	@param  paths - 
+	@param  vbo   - 
+	@param  ebo   - 
+	@retval       - 
+**/
 inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _Inout_ const GLuint ebo)
 {
 	struct mesh* meshes = NULL;
@@ -329,13 +362,14 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 	char* mtllibPath = _aligned_malloc(MAX_PATH, 8);
 
 	struct mesh active;
+	Path p;
 
 	uint32_t count = (uint32_t)arrlen(paths);
 	for (uint32_t ix = 0;
 		ix < count;
 		++ix, wfDestroyObj(&obj), wfDestroyMtllib(&mtllib))
 	{
-		Path p = paths[ix];
+		p = paths[ix];
 		FILE* file;
 		errno_t err;  
 
@@ -366,7 +400,10 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 			//Let's be a bit clever and just transfer ownership.
 			active.name = obj.name;
 			obj.name = NULL;
+
 		}
+		
+		OutputDebugFormatted(_T("Creating mesh \"%hs\".\n"), active.name ? active.name : "NONAME");
 
 		uint32_t groupCount = (uint32_t)arrlen(obj.groups);
 		for (uint32_t ixG = 0; ixG < groupCount; ixG++)
@@ -427,22 +464,6 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 		size_t verticesDataSize = sizeof(struct Vertex) * m->vertexCount;
 		size_t vertexByteOffset = sizeof(struct Vertex) * m->vertexOffset;
 
-#ifdef _DEBUG
-		TCHAR dbgline[512];
-		_stprintf_s(dbgline, 512, _T(
-			"reading \"%hs\":\n "
-			"\t-Vertex Byte count : %llu (= 32 * %d vertices)\n"
-			"\t-Vertex Byte offset: %llu (= 32 * %d vertices)\n"
-			"\t- Index Byte count : %llu (=  4 * %d elements)\n"
-			"\t- Index Byte offset: %llu (=  4 * %d elements)\n"
-			"\n"),
-			m->name,
-			verticesDataSize, m->vertexCount, vertexByteOffset, m->vertexOffset,
-			indicesDataSize, indicesCount, indexByteOffset, indexOffset
-		);
-		OutputDebugString(dbgline);
-#endif // _DEBUG
-
 		glNamedBufferSubData(vbo, vertexByteOffset, verticesDataSize, verticesV[ix]);
 		glNamedBufferSubData(ebo,  indexByteOffset,  indicesDataSize,  indicesV[ix]);
 		
@@ -467,6 +488,9 @@ CLEANUP:
 	return meshes;
 
 CLEANUP_INVALID:
+
+	OutputDebugFormatted(_T("Failed to read object in \"%hs\""), p);
+
 	wfDestroyObj(&obj);
 	wfDestroyMtllib(&mtllib);
 	destroy_mesh(&active);
@@ -531,7 +555,6 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	}
 
 
-
 	GLuint vao;
 	glCreateVertexArrays(1, &vao);
 	NAME_OBJECT(GL_VERTEX_ARRAY, vao, "<Mesh Vertex Array>");
@@ -555,6 +578,7 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	arrput(paths, "globe.obj");
 	arrput(paths, "Suzanne.obj");
 	arrput(paths, "teapot.obj");
+	arrput(paths, "sphere.obj");
 	
 	
 	
@@ -577,7 +601,7 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	mat4 tmp;
 
 	mat4x4_identity(meshes[0].matrix);
-
+	
 	//model = translation * rotation * scale 
 	mat4x4_mul(meshes[1].matrix, 
 		mat4x4_translate(meshes[1].matrix, lightPos[0], lightPos[1], lightPos[2]), 
@@ -587,6 +611,9 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	mat4x4_translate(meshes[3].matrix, 0, 0, 10);
 
 	mat4x4_translate(meshes[4].matrix, 15, 0, 0);
+
+	mat4x4_translate(meshes[5].matrix, 5, 5, 5);
+	
 
 	
 	GLuint ixBind = 0;
@@ -728,14 +755,19 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 		
 		nk_input_end(ctx);
 #pragma endregion
-
-		uint32_t nwidth, nheight;
-		platform_getDimensions(ctx, &nwidth, &nheight);
-		if (nwidth != width || nheight != nheight)
+		
+		//update viewport
 		{
-			width = nwidth;
-			height = nheight;
-			glViewport(0, 0, width, height);
+			uint32_t nwidth, nheight;
+			platform_getDimensions(ctx, &nwidth, &nheight);
+			if (nwidth != width || nheight != nheight)
+			{
+				width = nwidth;
+				height = nheight;
+				glViewport(0, 0, width, height);
+
+				mat4x4_perspective(cam._projection, M_PI / 4, (float)width / height, .1, 100);
+			}
 		}
 		
 
@@ -752,9 +784,6 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 				glUseProgram(mesh->program);
 				activeProgram = mesh->program;
 
-				glProgramUniform3fv(program, glGetUniformLocation(program, "u_camPos"),    1, pos);
-				glProgramUniform3fv(program, glGetUniformLocation(program, "u_lightPos"),  1, lightPos);
-				glProgramUniform3fv(program, glGetUniformLocation(program, "u_lightColor"),1, lightColor);
 			}
 
 			if (mesh->vao != activeVAO)
@@ -763,18 +792,39 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 				glBindVertexArray(mesh->vao);
 			}
 
+			GLint
+				camPosLocation = glGetUniformLocation(activeProgram, "u_camPos"),
+				lightPosLocation = glGetUniformLocation(activeProgram, "u_lightPos"),
+				lightColorLocation = glGetUniformLocation(activeProgram, "u_lightColor");
+
+			if (camPosLocation != -1)
+				glProgramUniform3fv(activeProgram, camPosLocation, 1, pos);
+			if (lightPosLocation != -1)
+				glProgramUniform3fv(activeProgram, lightPosLocation, 1, lightPos);
+			if (lightColorLocation != -1)
+				glProgramUniform3fv(activeProgram, lightColorLocation, 1, lightColor);
+
+
 			mat4 model;
 			mat4x4_dup(model, mesh->matrix);
-			glProgramUniformMatrix4fv(program, glGetUniformLocation(program, "u_model"), 1, false, model);
 
 			mat4 matrix;//model matrix
 			mat4x4_mul(matrix, cam.matrix, model); //matrix = cam's matrix * E
-			glProgramUniformMatrix4fv(program, glGetUniformLocation(program, "u_matrix"), 1, false, matrix);
 
 			mat4 normalMatrix; // = mat3(transpose(inverse(model)))
 			mat4x4_transpose(normalMatrix, mat4x4_invert(normalMatrix, model));
-			glProgramUniformMatrix3fv(program, glGetUniformLocation(program, "u_normalMatrix"), 1, false, normalMatrix);
 
+			GLint
+				modelMatrixLocation = glGetUniformLocation(activeProgram, "u_model"),
+				projectionViewModelMatrixLocation = glGetUniformLocation(activeProgram, "u_matrix"),
+				normalMatrixLocation = glGetUniformLocation(activeProgram, "u_normalMatrix");
+
+			if (modelMatrixLocation != -1)
+				glProgramUniformMatrix4fv(activeProgram, modelMatrixLocation, 1, false, model);
+			if (projectionViewModelMatrixLocation != -1)
+				glProgramUniformMatrix4fv(activeProgram, projectionViewModelMatrixLocation, 1, false, matrix);
+			if (normalMatrixLocation != -1)
+				glProgramUniformMatrix4fv(activeProgram, normalMatrixLocation, 1, false, normalMatrix);
 			
 
 			uint32_t groupCount = arrlen(mesh->groups);
@@ -786,34 +836,37 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 			{
 				struct group g = mesh->groups[ixG];
 
-
 				if (g.hasMaterial)
 				{
-					glProgramUniform3fv(program, glGetUniformLocation(program, "u_ambientColor"), 1, g.mtl.ambient);
-					glProgramUniform3fv(program, glGetUniformLocation(program, "u_diffuseColor"), 1, g.mtl.diffuse);
-					glProgramUniform3fv(program, glGetUniformLocation(program, "u_specularColor"),1, g.mtl.specular);
+					GLint
+						ambientColorLocation = glGetUniformLocation(activeProgram, "u_ambientColor"),
+						diffuseColorLocation = glGetUniformLocation(activeProgram, "u_diffuseColor"),
+						specularColorLocation= glGetUniformLocation(activeProgram, "u_specularColor"),
+						alphaLocation		 = glGetUniformLocation(activeProgram, "u_alpha"),
+						shininessLocation	 = glGetUniformLocation(activeProgram, "u_shininess");
 
-					glProgramUniform1f(program, glGetUniformLocation(program, "u_alpha"), g.mtl.alpha);
-					glProgramUniform1f(program, glGetUniformLocation(program, "u_shininess"), g.mtl.shininess);
+					if (ambientColorLocation != -1)
+						glProgramUniform3fv(activeProgram, ambientColorLocation, 1, g.mtl.ambient);
+					if (diffuseColorLocation != -1) 
+						glProgramUniform3fv(activeProgram, diffuseColorLocation, 1, g.mtl.diffuse);
+					if (specularColorLocation != -1)
+						glProgramUniform3fv(activeProgram, specularColorLocation,1, g.mtl.specular);
+					if(alphaLocation != -1)
+						glProgramUniform1f(activeProgram, alphaLocation, g.mtl.alpha);
+					if(shininessLocation != -1)
+						glProgramUniform1f(activeProgram, shininessLocation, g.mtl.shininess);
 				}
 
 				if (mesh->vertexOffset != 0)
-				{
 					//
 					// When there are multiple meshes stored in the same vbo and ebo,
 					// the meshes are stored sequencialy in both buffers.
 					//
-					glDrawElementsBaseVertex(GL_TRIANGLES, g.count, GL_UNSIGNED_INT, (void*)(sizeof(uint32_t) * (size_t)(g.ixFirst + mesh->indexOffset)), mesh->vertexOffset);
-				}
+					glDrawElementsBaseVertex(GL_TRIANGLES, g.count, GL_UNSIGNED_INT, (void*)(sizeof(uint32_t) * (g.ixFirst + mesh->indexOffset)), mesh->vertexOffset);
 				else
-				{
-					glDrawElements(GL_TRIANGLES, g.count, GL_UNSIGNED_INT, (void*)(sizeof(uint32_t) * g.ixFirst));
-				}
+					glDrawElements(GL_TRIANGLES, g.count, GL_UNSIGNED_INT, (void*)(sizeof(uint32_t) * (g.ixFirst + mesh->indexOffset)));
 			}
 		}
-
-		activeVAO = 0;
-		glBindVertexArray(0);
 		
 
 		BOOL swapSuccess = platform_swapBuffers(ctx);
@@ -821,8 +874,7 @@ int main(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ wchar_t** argV, _In_ wcha
 	}
 
 	uint32_t meshCount = arrlen(meshes);
-	for (uint32_t i = 0; i < meshCount; i++)
-		destroy_mesh(meshes + i);
+	for (uint32_t i = 0; i < meshCount; i++) destroy_mesh(meshes + i);
 	arrfree(meshes);
 
 	glDeleteBuffers(1, &ebo);

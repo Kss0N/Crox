@@ -15,10 +15,7 @@ layout(location = 1) uniform mat4 u_model = mat4(
 0,1,0,0,
 0,0,1,0,
 0,0,0,1);
-layout(location = 2) uniform mat3 u_normalMatrix = mat3(
-1,0,0,
-0,1,0,
-0,0,1); // = mat3(transpose(inverse(model)))
+layout(location = 2) uniform mat4 u_normalMatrix; //TODO: make it mat3 on the cpu before uploading it
 
 out VData 
 {
@@ -32,6 +29,6 @@ void main()
 	gl_Position = u_matrix * vec4(aXYZ, 1.0f);
 
 	vout.pos = vec3(u_model * vec4(aXYZ,1));
-	vout.normal = normalize(u_normalMatrix * (aIJK));
+	vout.normal = normalize( mat3(u_normalMatrix) * aIJK );
 	vout.tex = aUV;
 }

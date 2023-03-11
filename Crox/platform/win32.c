@@ -48,6 +48,7 @@ static BOOL loadOpenGL(_In_ HINSTANCE hInstance);
 static LRESULT APIENTRY setupWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM, _In_ LPARAM);
 static LRESULT APIENTRY mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM, _In_ LPARAM);
 
+void toggleFullscreen(NkContext* ctx);
 
 
 struct PlatformResources
@@ -55,15 +56,25 @@ struct PlatformResources
 	HWND hMainWnd;
 	HINSTANCE hInstance;
 	HACCEL hAccel;
+	
+	DWORD style;
+	DWORD exStyle;
+	BOOL isFullscreen;
+	WINDOWPLACEMENT prevPlacement;
+
 	void* aux;
 };
+inline struct PlatformResources* getResources(NkContext* ctx)
+{
+	return ((struct PlatformResources*)ctx->userdata.ptr);
+}
 inline HWND		getMainWnd(NkContext* ctx)
 {
-	return ((struct PlatformResources*)ctx->userdata.ptr)->hMainWnd;
+	return getResources(ctx)->hMainWnd;
 }
 inline HACCEL	getAccel(NkContext* ctx)
 {
-	return ((struct PlatformResources*)ctx->userdata.ptr)->hAccel;
+	return getResources(ctx)->hAccel;
 }
 
 /**
@@ -217,10 +228,17 @@ extern APIENTRY _tWinMain(
 		int argC	= 0;
 		LPTSTR* argV= CommandLineToArgvW(lpCmdline, &argC);
 		
+		WINDOWPLACEMENT placement;
+		GetWindowPlacement(hMainWnd, &placement);
+
 		struct PlatformResources rsc = {
 			.hMainWnd = hMainWnd,
 			.hInstance = hInstance,
 			.hAccel = NULL,
+			.style = GetWindowLong(hMainWnd, GWL_STYLE),
+			.exStyle = GetWindowLong(hMainWnd, GWL_EXSTYLE),
+			.isFullscreen = FALSE,
+			.prevPlacement = placement,
 			.aux = NULL,
 		};
 		nk_set_user_data(ctx, (nk_handle) { .ptr = &rsc });
@@ -523,6 +541,8 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 	}
 	case WM_KEYDOWN: {
 
+		if(wParam == VK_F11)
+			toggleFullscreen(ctx);
 
 		break;
 	}
@@ -543,7 +563,7 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 		BOOL isSystem = (flags & KF_ALTDOWN) == KF_ALTDOWN;
 
 		nk_input_char(ctx, key);
-
+			
 
 		break;
 	}
@@ -571,6 +591,49 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 		return DefWindowProc(hWnd, msg, wParam, lParam);
 	}
 	return 0L;
+}
+
+//FIXME
+void toggleFullscreen(NkContext* ctx)
+{
+	struct PlatformResources* rsc = getResources(ctx);
+
+	if (!rsc->isFullscreen)
+	{
+		// set normal
+		MONITORINFO mi = { sizeof(mi) };
+
+		if (GetWindowPlacement(rsc->hMainWnd, &rsc->prevPlacement) &&
+			GetMonitorInfo(MonitorFromWindow(rsc->hMainWnd,
+				MONITOR_DEFAULTTOPRIMARY), &mi))
+		{
+			SetWindowLong(rsc->hMainWnd, GWL_STYLE,
+				rsc->style & ~WS_OVERLAPPEDWINDOW);
+
+			SetWindowPos(rsc->hMainWnd, HWND_TOP,
+				mi.rcMonitor.left, mi.rcMonitor.top,
+				mi.rcMonitor.right - mi.rcMonitor.left,
+				mi.rcMonitor.bottom - mi.rcMonitor.top,
+				SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+		}
+	}
+	else
+	{
+		//Set fullscreen
+
+		SetWindowLong(rsc->hMainWnd, GWL_STYLE,
+			rsc->style | WS_OVERLAPPEDWINDOW);
+		SetWindowPlacement(rsc->hMainWnd, &rsc->prevPlacement);
+
+		SetWindowPos(rsc->hMainWnd, NULL, 0, 0, 0, 0,
+			SWP_NOMOVE | 
+			SWP_NOSIZE |
+			SWP_NOZORDER |
+			SWP_NOOWNERZORDER | 
+			SWP_FRAMECHANGED);
+	}
+
+	rsc->isFullscreen = !rsc->isFullscreen;
 }
 
 

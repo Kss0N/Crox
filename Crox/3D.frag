@@ -38,18 +38,20 @@ uniform vec3 u_ambientColor = vec3(0.1, 0.1, 0.1);
 uniform vec3 u_diffuseColor = vec3(0.8, 0.8, 0.8);
 uniform vec3 u_specularColor= vec3(0.8, 0.8, 0.8);
 
-uniform float u_alpha = 1.0f;
-uniform float u_shininess = 1.0f;
+uniform float u_alpha = 1.0;
+uniform float u_shininess = 1.0;
 
 void main()
 {
-	vec3 lightDir= normalize(u_lightPos - fin.pos);
-	vec3 viewDir = normalize(u_camPos-fin.pos);
-	vec3 halfDir = normalize(lightDir + viewDir); 
-	vec3 reflDir = reflect(-lightDir, fin.normal);
+	vec3 
+		lightDir= normalize(u_lightPos - fin.pos),
+		viewDir = normalize(u_camPos-fin.pos),
+		halfDir = normalize(lightDir + viewDir), 
+		reflDir = reflect(-lightDir, fin.normal);
 
-	float diff = max(dot(fin.normal, lightDir), 0.0);
-	float spec = pow(max(dot(halfDir, reflDir), 0.0), u_shininess);
+	float 
+		diff = max(dot(fin.normal, lightDir), 0.0),
+		spec = pow(max(dot(halfDir, fin.normal), 0.0), u_shininess);
 
 
 	vec3 ambient = u_ambientColor*0.25;

@@ -182,6 +182,27 @@
     <None Include="biplane\G17SL.MAX">
       <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
     </None>
+    <None Include="3D.geom">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="normals.geom">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="normals.frag">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="normals.vert">
+      <Filter>Shader Files</Filter>
+    </None>
+    <None Include="globe.mtl">
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    </None>
+    <None Include="gtx1080ti.mtl">
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    </None>
+    <None Include="sphere.mtl">
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Object Include="cube.obj">
@@ -195,6 +216,15 @@
     </Object>
     <Object Include="biplane\biplane.obj">
       <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    </Object>
+    <Object Include="globe.obj">
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    </Object>
+    <Object Include="gtx1080ti.obj">
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    </Object>
+    <Object Include="sphere.obj">
+      <Filter>Resource Files\Mesh\Wavefront</Filter>
     </Object>
   </ItemGroup>
 </Project>
