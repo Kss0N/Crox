@@ -1,4 +1,3 @@
-#ifdef _DEBUG
 /**
  * SPDX-License-Identifier: (WTFPL OR CC0-1.0) AND Apache-2.0
  */
@@ -1803,5 +1802,3 @@ int gladLoaderLoadWGL(HDC hdc) {
 #ifdef __cplusplus
 }
 #endif
-
-#endif // _DEBUG

@@ -5,7 +5,7 @@ VisualStudioVersion = 17.4.33213.308
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Crox", "Crox\Crox.vcxproj", "{B07C2835-988D-4BA5-B20C-FE64536D5688}"
 EndProject
-Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "ShaderBuildEventScript", "ShaderBuildEventScript\ShaderBuildEventScript.pyproj", "{3D93517A-4350-4BC8-9071-FE9CB55FB1B2}"
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "cxShaderBuildEventScript", "cxShaderBuildEventScript\cxShaderBuildEventScript.pyproj", "{3D93517A-4350-4BC8-9071-FE9CB55FB1B2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

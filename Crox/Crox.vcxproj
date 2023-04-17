@@ -137,6 +137,20 @@
       <AdditionalDependencies>opengl32.lib;shaderc.lib;shaderc_combined.lib;shaderc_util.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>%VULKAN_SDK%\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>py "$(SolutionDir)cxShaderBuildEventScript\cxShaderBuildEventScript.py" "$(ProjectDir)." "$(OutDir)."</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>---- Compiling Shader ----</Message>
+    </PostBuildEvent>
+    <PreLinkEvent>
+      <Command>
+      </Command>
+    </PreLinkEvent>
+    <PreLinkEvent>
+      <Message>
+      </Message>
+    </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -157,6 +171,18 @@
       <AdditionalDependencies>opengl32.lib;shaderc.lib;shaderc_combined.lib;shaderc_util.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>%VULKAN_SDK%\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <PreLinkEvent>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+    </PreLinkEvent>
+    <PostBuildEvent>
+      <Command>py "$(SolutionDir)cxShaderBuildEventScript\cxShaderBuildEventScript.py" "$(ProjectDir)." "$(OutDir)."</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>---- Compiling Shader ----</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\externals\cJSON.c" />
@@ -167,7 +193,9 @@
     <ClCompile Include="..\externals\stb_vorbis.c" />
     <ClCompile Include="..\externals\wgl.c" />
     <ClCompile Include="..\externals\xml.c" />
+    <ClCompile Include="camera.c" />
     <ClCompile Include="Crox.c" />
+    <ClCompile Include="gltf.c" />
     <ClCompile Include="nuklear_impl.c" />
     <ClCompile Include="platform\win32.c" />
     <ClCompile Include="stb_impl.c" />
@@ -175,6 +203,7 @@
     <ClCompile Include="wavefront.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="camera.h" />
     <ClInclude Include="Crox.h" />
     <ClInclude Include="framework_crt.h" />
     <ClInclude Include="framework_nuklear.h" />
@@ -191,69 +220,59 @@
     <ResourceCompile Include="Crox.rc" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="biplane\G17SBEEH.JPG" />
-    <Image Include="biplane\G17SBEMS.JPG" />
-    <Image Include="biplane\G17SHELC.JPG" />
-    <Image Include="biplane\G17SHENG.JPG" />
-    <Image Include="biplane\G17SLTRB.JPG" />
-    <Image Include="biplane\G17SLTRR.JPG" />
-    <Image Include="biplane\G17SNUMR.JPG" />
-    <Image Include="biplane\G17SPICF.JPG" />
-    <Image Include="biplane\LAKEREM.JPG" />
+    <Image Include="..\rsc\mesh\biplane\G17SBEEH.JPG" />
+    <Image Include="..\rsc\mesh\biplane\G17SBEMS.JPG" />
+    <Image Include="..\rsc\mesh\biplane\G17SHELC.JPG" />
+    <Image Include="..\rsc\mesh\biplane\G17SHENG.JPG" />
+    <Image Include="..\rsc\mesh\biplane\G17SLTRB.JPG" />
+    <Image Include="..\rsc\mesh\biplane\G17SLTRR.JPG" />
+    <Image Include="..\rsc\mesh\biplane\G17SNUMR.JPG" />
+    <Image Include="..\rsc\mesh\biplane\G17SPICF.JPG" />
+    <Image Include="..\rsc\mesh\biplane\LAKEREM.JPG" />
     <Image Include="opengl.ico" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\rsc\mesh\biplane\biplane.mtl" />
+    <None Include="..\rsc\mesh\biplane\G17SL.3ds" />
+    <None Include="..\rsc\mesh\biplane\G17SL.MAX" />
+    <None Include="..\rsc\mesh\cube.mtl" />
+    <None Include="..\rsc\mesh\globe.mtl" />
+    <None Include="..\rsc\mesh\gtx1080ti.mtl" />
+    <None Include="..\rsc\mesh\sphere.mtl" />
+    <None Include="..\rsc\mesh\Suzanne.mtl" />
     <None Include="3D.frag" />
-    <None Include="3D.geom" />
     <None Include="3D.vert" />
-    <None Include="biplane\biplane.mtl" />
-    <None Include="biplane\G17SL.3ds" />
-    <None Include="biplane\G17SL.MAX" />
-    <None Include="cube.mtl" />
     <None Include="default.frag" />
     <None Include="default.vert" />
-    <None Include="globe.mtl" />
-    <None Include="gtx1080ti.mtl" />
-    <None Include="normals.vert" />
-    <None Include="normals.frag" />
-    <None Include="normals.geom" />
-    <None Include="sphere.mtl" />
-    <None Include="Suzanne.mtl" />
   </ItemGroup>
   <ItemGroup>
-    <Object Include="biplane\biplane.obj">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </Object>
-    <Object Include="cube.obj">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </Object>
-    <Object Include="globe.obj">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    <Object Include="..\rsc\mesh\biplane\biplane.obj">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </Object>
-    <Object Include="gtx1080ti.obj">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    <Object Include="..\rsc\mesh\cube.obj">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </Object>
-    <Object Include="sphere.obj">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    <Object Include="..\rsc\mesh\globe.obj">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </Object>
-    <Object Include="Suzanne.obj">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    <Object Include="..\rsc\mesh\gtx1080ti.obj">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </Object>
-    <Object Include="teapot.obj">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    <Object Include="..\rsc\mesh\sphere.obj">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </Object>
+    <Object Include="..\rsc\mesh\Suzanne.obj">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </Object>
+    <Object Include="..\rsc\mesh\teapot.obj">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </Object>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

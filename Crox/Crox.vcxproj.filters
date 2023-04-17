@@ -28,14 +28,29 @@
     <Filter Include="Shader Files">
       <UniqueIdentifier>{e6400632-4fae-46a2-8088-e151cc4ea213}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resource Files\Mesh">
-      <UniqueIdentifier>{f3a1a64d-ad46-4911-8955-63e86928df9a}</UniqueIdentifier>
+    <Filter Include="Resource Files\meshes">
+      <UniqueIdentifier>{bcdcac5a-2577-4a18-b490-b89bc55be9c5}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resource Files\Mesh\Wavefront">
-      <UniqueIdentifier>{0e005a3c-81b1-4fb2-8b80-0f7328fe59db}</UniqueIdentifier>
+    <Filter Include="Resource Files\meshes\wavefront">
+      <UniqueIdentifier>{5e23472e-08d2-4a4b-a5c8-8d8bccccbdd6}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resource Files\Mesh\Wavefront\biplane">
-      <UniqueIdentifier>{032f57b2-e875-4a05-96f0-8152e39d5969}</UniqueIdentifier>
+    <Filter Include="Resource Files\meshes\wavefront\biplane">
+      <UniqueIdentifier>{1149e219-4141-4f20-9b67-8615fbb517f5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\meshes\wavefront\cube">
+      <UniqueIdentifier>{94f77f2a-767a-43c8-b952-12db34a94c16}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\meshes\wavefront\globe">
+      <UniqueIdentifier>{5cca72f6-6018-468f-9ceb-cf3723818315}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\meshes\wavefront\gtx 1080ti">
+      <UniqueIdentifier>{48b194de-011f-476c-8fc1-ebf2afe31262}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\meshes\wavefront\sphere">
+      <UniqueIdentifier>{00526266-2cc7-4e34-b96f-b54ad2da2422}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\meshes\wavefront\Suzanne">
+      <UniqueIdentifier>{00198ad3-ebfe-4f18-9ce1-778d76299346}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -81,6 +96,12 @@
     <ClCompile Include="wavefront.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="gltf.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="camera.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework_nuklear.h">
@@ -116,43 +137,14 @@
     <ClInclude Include="NullSemantics.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Crox.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="opengl.ico">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="biplane\G17SBEEH.JPG">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
-    </Image>
-    <Image Include="biplane\G17SBEMS.JPG">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
-    </Image>
-    <Image Include="biplane\G17SHELC.JPG">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
-    </Image>
-    <Image Include="biplane\G17SHENG.JPG">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
-    </Image>
-    <Image Include="biplane\G17SLTRB.JPG">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
-    </Image>
-    <Image Include="biplane\G17SLTRR.JPG">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
-    </Image>
-    <Image Include="biplane\G17SNUMR.JPG">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
-    </Image>
-    <Image Include="biplane\G17SPICF.JPG">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
-    </Image>
-    <Image Include="biplane\LAKEREM.JPG">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
-    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="default.vert">
@@ -167,64 +159,84 @@
     <None Include="3D.frag">
       <Filter>Shader Files</Filter>
     </None>
-    <None Include="cube.mtl">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    <None Include="..\rsc\mesh\cube.mtl">
+      <Filter>Resource Files\meshes\wavefront\cube</Filter>
     </None>
-    <None Include="Suzanne.mtl">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    <None Include="..\rsc\mesh\globe.mtl">
+      <Filter>Resource Files\meshes\wavefront\globe</Filter>
     </None>
-    <None Include="biplane\biplane.mtl">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    <None Include="..\rsc\mesh\gtx1080ti.mtl">
+      <Filter>Resource Files\meshes\wavefront\gtx 1080ti</Filter>
     </None>
-    <None Include="biplane\G17SL.3ds">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    <None Include="..\rsc\mesh\sphere.mtl">
+      <Filter>Resource Files\meshes\wavefront\sphere</Filter>
     </None>
-    <None Include="biplane\G17SL.MAX">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    <None Include="..\rsc\mesh\Suzanne.mtl">
+      <Filter>Resource Files\meshes\wavefront\Suzanne</Filter>
     </None>
-    <None Include="3D.geom">
-      <Filter>Shader Files</Filter>
+    <None Include="..\rsc\mesh\biplane\biplane.mtl">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
     </None>
-    <None Include="normals.geom">
-      <Filter>Shader Files</Filter>
+    <None Include="..\rsc\mesh\biplane\G17SL.3ds">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
     </None>
-    <None Include="normals.frag">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="normals.vert">
-      <Filter>Shader Files</Filter>
-    </None>
-    <None Include="globe.mtl">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
-    </None>
-    <None Include="gtx1080ti.mtl">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
-    </None>
-    <None Include="sphere.mtl">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    <None Include="..\rsc\mesh\biplane\G17SL.MAX">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Object Include="cube.obj">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    <Object Include="..\rsc\mesh\teapot.obj">
+      <Filter>Resource Files\meshes\wavefront</Filter>
     </Object>
-    <Object Include="Suzanne.obj">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    <Object Include="..\rsc\mesh\cube.obj">
+      <Filter>Resource Files\meshes\wavefront\cube</Filter>
     </Object>
-    <Object Include="teapot.obj">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    <Object Include="..\rsc\mesh\globe.obj">
+      <Filter>Resource Files\meshes\wavefront\globe</Filter>
     </Object>
-    <Object Include="biplane\biplane.obj">
-      <Filter>Resource Files\Mesh\Wavefront\biplane</Filter>
+    <Object Include="..\rsc\mesh\gtx1080ti.obj">
+      <Filter>Resource Files\meshes\wavefront\gtx 1080ti</Filter>
     </Object>
-    <Object Include="globe.obj">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    <Object Include="..\rsc\mesh\sphere.obj">
+      <Filter>Resource Files\meshes\wavefront\sphere</Filter>
     </Object>
-    <Object Include="gtx1080ti.obj">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    <Object Include="..\rsc\mesh\Suzanne.obj">
+      <Filter>Resource Files\meshes\wavefront\Suzanne</Filter>
     </Object>
-    <Object Include="sphere.obj">
-      <Filter>Resource Files\Mesh\Wavefront</Filter>
+    <Object Include="..\rsc\mesh\biplane\biplane.obj">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
     </Object>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="opengl.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\rsc\mesh\biplane\G17SBEEH.JPG">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
+    </Image>
+    <Image Include="..\rsc\mesh\biplane\G17SBEMS.JPG">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
+    </Image>
+    <Image Include="..\rsc\mesh\biplane\G17SHELC.JPG">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
+    </Image>
+    <Image Include="..\rsc\mesh\biplane\G17SHENG.JPG">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
+    </Image>
+    <Image Include="..\rsc\mesh\biplane\G17SLTRB.JPG">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
+    </Image>
+    <Image Include="..\rsc\mesh\biplane\G17SLTRR.JPG">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
+    </Image>
+    <Image Include="..\rsc\mesh\biplane\G17SNUMR.JPG">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
+    </Image>
+    <Image Include="..\rsc\mesh\biplane\G17SPICF.JPG">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
+    </Image>
+    <Image Include="..\rsc\mesh\biplane\LAKEREM.JPG">
+      <Filter>Resource Files\meshes\wavefront\biplane</Filter>
+    </Image>
   </ItemGroup>
 </Project>
