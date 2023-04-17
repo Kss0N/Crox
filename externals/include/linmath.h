@@ -339,6 +339,7 @@ LINMATH_H_FUNC float* mat3_orthonormalize(mat3 R, mat3 const M)
 
 ;
 typedef vec4 mat4x4[4];
+typedef mat4x4 mat4;
 LINMATH_H_FUNC float* mat4x4_identity(mat4x4 M)
 {
 	int i, j;
