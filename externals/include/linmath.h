@@ -199,7 +199,7 @@ LINMATH_H_FUNC float* mat3_mul(mat3 M, mat3 const a, mat3 const b)
 		for (k = 0; k < 3; ++k)
 			temp[c][r] += a[k][r] * b[c][k];
 	}
-	return mat3x3_dup(M, temp);
+	return mat3_dup(M, temp);
 }
 LINMATH_H_FUNC float* mat3_mul_vec3(vec3 r, mat3 const M, vec3 const v)
 {
@@ -270,7 +270,7 @@ LINMATH_H_FUNC float* mat3_rotate_Y(mat3 Q, mat3 const M, float angle)
 		{ 0.f, 1.f, 0.f},
 		{   s, 0.f,   c},
 	};
-	return mat3x3_mul(Q, M, R);
+	return mat3_mul(Q, M, R);
 }
 LINMATH_H_FUNC float* mat3_rotate_Z(mat3 Q, mat3 const M, float angle)
 {
@@ -831,7 +831,7 @@ LINMATH_H_FUNC float* quat_from_mat4x4(quat q, mat4x4 const M)
 	if (r < 1e-6) {
 		q[0] = 1.f;
 		q[1] = q[2] = q[3] = 0.f;
-		return;
+		return (float*) q;
 	}
 
 	q[0] = r / 2.f;
@@ -839,7 +839,7 @@ LINMATH_H_FUNC float* quat_from_mat4x4(quat q, mat4x4 const M)
 	q[2] = (M[p[2]][p[0]] - M[p[0]][p[2]]) / (2.f * r);
 	q[3] = (M[p[2]][p[1]] - M[p[1]][p[2]]) / (2.f * r);
 
-	return 1;
+	return (float*)q;
 }
 
 LINMATH_H_FUNC float* mat4x4_arcball(mat4x4 R, mat4x4 const M, vec2 const _a, vec2 const _b, float s)
@@ -871,6 +871,6 @@ LINMATH_H_FUNC float* mat4x4_arcball(mat4x4 R, mat4x4 const M, vec2 const _a, ve
 	vec3_mul_cross(c_, a_, b_);
 
 	float const angle = acos(vec3_mul_inner(a_, b_)) * s;
-	return mat4x4_rotate(R, M, c_[0], c_[1], c_[2], angle);
+	return (float*)mat4x4_rotate(R, M, c_[0], c_[1], c_[2], angle);
 }
 #endif

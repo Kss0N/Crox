@@ -7,9 +7,6 @@
 	@date      17.04.2023
 
 **/
-
-
-
 #include "Crox.h"
 #include "platform/Platform.h"
 #include "framework_crt.h"
@@ -20,18 +17,15 @@
 
 #include <glad/gl.h>
 #include <glad/wgl.h>
-
-#define _USE_MATH_DEFINES
-#include <math.h>
 #include <linmath.h>
-#include <cwalk.h>
 #include <stb_ds.h>
 #include <stb_image.h>
 #include <stb_include.h>
+#include <cwalk.h>
+
+#define _USE_MATH_DEFINES
+#include <math.h>
 #include <tchar.h>
-
-
-
 
 
 #ifdef _DEBUG
@@ -55,22 +49,14 @@ int OutputDebugFormatted(
 #define OutputDebugFormatted(f, ...)
 #endif // _DEBUG
 
-
-
-float toRadians(float deg)
-{
-	return deg * (float)(180.0 / M_PI);
-}
-
-
 #define NAME_OBJECT(type, obj, name) glObjectLabel(type, obj, -(signed)strlen(name),name);
 
 typedef _Null_terminated_ const char* Path;
 
-GLuint makeShader(GLenum type, const char* path)
+static GLuint makeShader(GLenum type, const char* path)
 {
 	char error[256];
-	char* source = stb_include_file(path, NULL, NULL, error);
+	char* source = stb_include_file((char*)path, NULL, NULL, error);
 	if (source == NULL)
 	{
 		glDebugMessageInsert(GL_DEBUG_SOURCE_THIRD_PARTY, GL_DEBUG_TYPE_ERROR, 1, GL_DEBUG_SEVERITY_HIGH, -(signed)strlen(error), error); 
@@ -81,7 +67,7 @@ GLuint makeShader(GLenum type, const char* path)
 	GLuint shader = glCreateShader(type);
 	NAME_OBJECT(GL_SHADER, shader, path);
 
-	glShaderSource(shader, 1, &source, &length);
+	glShaderSource(shader, 1, &source, &(GLint)length);
 	glCompileShader(shader);
 
 	GLint isCompiled = false;
@@ -113,7 +99,8 @@ GLuint makeShader(GLenum type, const char* path)
 	return shader;
 }
 
-GLuint makeProgramGLSL(
+//TODO
+static GLuint makeProgramGLSL(
 	_In_		Path		vertex,
 	_In_opt_	Path		tessEval,
 	_In_opt_	Path		tessCtrl,
@@ -123,7 +110,7 @@ GLuint makeProgramGLSL(
 	return 0;
 }
 
-const unsigned char* readBinary(_In_z_ Path p, _Out_ size_t* len)
+static const unsigned char* readBinary(_In_z_ Path p, _Out_ size_t* len)
 {
 	FILE* f;
 	fopen_s(&f, p, "rb");
@@ -152,7 +139,7 @@ const unsigned char* readBinary(_In_z_ Path p, _Out_ size_t* len)
 inline void cleanupSource(const char* src)
 {
 	if (src != NULL)
-		free(src);
+		free((void*)src);
 }
 
 inline void detachDeleteShader(GLuint fromProgram, GLuint shader)
@@ -181,20 +168,20 @@ inline bool checkCompileStatus(GLuint shader)
 	}
 	return isCompiled;
 }
-#else
-#define checkCompileStatus(shader)
-#endif // _DEBUG
-
 inline bool isSPIRV(GLuint shader)
 {
 	GLint isSpirv = false;
 	glGetShaderiv(shader, GL_SPIR_V_BINARY, &isSpirv);
 	return isSpirv;
 }
+#else
+#define checkCompileStatus(shader)
+#define isSPIRV(shader)
+#endif // _DEBUG
 
-static void compileAndAttachSPIRV(_In_ GLuint shader, _In_ GLuint program, _In_ GLsizei codeLength, _In_reads_bytes_(codeLength) GLchar* code)
+static void compileAndAttachSPIRV(_In_ GLuint shader, _In_ GLuint program, _In_ size_t codeLength, _In_reads_bytes_(codeLength) const GLchar* code)
 {
-	glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, code, codeLength);
+	glShaderBinary(1, &shader, GL_SHADER_BINARY_FORMAT_SPIR_V, code, (GLsizei)codeLength);
 	assert(isSPIRV(shader));
 	glSpecializeShader(shader, "main", 0, NULL, NULL);
 	assert(checkCompileStatus(shader));
@@ -210,7 +197,7 @@ static void compileAndAttachSPIRV(_In_ GLuint shader, _In_ GLuint program, _In_ 
 	@param  fragment - path to fragment shader SPIR-V.
 	@retval          - valid program. 0 on failure
 **/
-_Must_inspect_result_ _Success_(return != 0) GLuint 
+_Must_inspect_result_ _Success_(return != 0) static GLuint 
 makeProgramSPIRV(
 	_In_z_		Path		  vertex,
 	_In_opt_z_	Path		tessEval,
@@ -244,12 +231,12 @@ makeProgramSPIRV(
 		 gSrcLen = 0,
 		 fSrcLen = 0;
 
-	const uint8_t*
-		 vSrc = readBinary( vertex, &vSrcLen),						//	   Vertex SPIRV Source
-		teSrc = tessEval ? readBinary(tessEval, &tcSrcLen) : NULL,	//	Tess Eval SPIRV source
-		tcSrc = tessCtrl ? readBinary(tessCtrl, &teSrcLen) : NULL,	//	Tess Ctrl SPIRV source
-		 gSrc = geometry ? readBinary(geometry, & gSrcLen) : NULL,	//   Geometry SPIRC Source
-		 fSrc = readBinary(fragment, &fSrcLen);						//   fragment SPIRV Source
+	const uint8_t
+		* vSrc = readBinary( vertex, &vSrcLen),						//	   Vertex SPIRV Source
+		*teSrc = tessEval ? readBinary(tessEval, &tcSrcLen) : NULL,	//	Tess Eval SPIRV source
+		*tcSrc = tessCtrl ? readBinary(tessCtrl, &teSrcLen) : NULL,	//	Tess Ctrl SPIRV source
+		* gSrc = geometry ? readBinary(geometry, & gSrcLen) : NULL,	//   Geometry SPIRC Source
+		* fSrc = readBinary(fragment, &fSrcLen);						//   fragment SPIRV Source
 	
 	if (!vSrc				||
 		(tessEval && !tcSrc)||
@@ -262,16 +249,16 @@ makeProgramSPIRV(
 	}
 
 	GLuint
-		 vShader = glCreateShader(GL_VERTEX_SHADER),						// Vertex shader
-		teShader = tessEval ? glCreateShader(GL_TESS_EVALUATION_SHADER) : 0,// Tesselation evalutation shader (optional)
-		tcShader = tessCtrl ? glCreateShader(GL_TESS_CONTROL_SHADER)	: 0,// Tesselation control shader (optional)
-		 gShader = geometry ? glCreateShader(GL_GEOMETRY_SHADER)		: 0,// Geometry shader (optional)
-		 fShader = glCreateShader(GL_FRAGMENT_SHADER);						// Fragment shader		
+		 vShader = glCreateShader(GL_VERTEX_SHADER),					// Vertex shader
+		teShader = teSrc ? glCreateShader(GL_TESS_EVALUATION_SHADER): 0,// Tesselation evalutation shader (optional)
+		tcShader = tcSrc ? glCreateShader(GL_TESS_CONTROL_SHADER)	: 0,// Tesselation control shader (optional)
+		 gShader =  gSrc ? glCreateShader(GL_GEOMETRY_SHADER)		: 0,// Geometry shader (optional)
+		 fShader = glCreateShader(GL_FRAGMENT_SHADER);					// Fragment shader		
 
 	NAME_OBJECT(GL_SHADER, vShader, vertex);
-	if (tessEval) NAME_OBJECT(GL_SHADER, teShader, tessEval);
-	if (tessCtrl) NAME_OBJECT(GL_SHADER, tcShader, tessCtrl);
-	if (geometry) NAME_OBJECT(GL_SHADER,  gShader, geometry);
+	if (teShader) NAME_OBJECT(GL_SHADER, teShader, tessEval);
+	if (tcShader) NAME_OBJECT(GL_SHADER, tcShader, tessCtrl);
+	if ( gShader) NAME_OBJECT(GL_SHADER,  gShader, geometry);
 	NAME_OBJECT(GL_SHADER, fShader, fragment);
 
 	program = glCreateProgram();
@@ -281,6 +268,8 @@ makeProgramSPIRV(
 	if (tcShader) compileAndAttachSPIRV(tcShader, program, tcSrcLen, tcSrc);
 	if ( gShader) compileAndAttachSPIRV( gShader, program,  gSrcLen,  gSrc);
 	compileAndAttachSPIRV(fShader, program, fSrcLen, fSrc);
+	
+	glLinkProgram(program);
 	
 	GLint isLinked = GL_FALSE;
 	glGetProgramiv(program, GL_LINK_STATUS, &isLinked);
@@ -332,31 +321,25 @@ struct mesh
 	mat4 matrix;
 	
 };
-
 void destroy_mesh(struct mesh* m)
 {
 	arrfree(m->groups);
 	
 	if (m->name) 
 	{
-		_aligned_free(m->name);
+		_aligned_free((void*)m->name);
 		m->name = NULL;
 	}
 	m->vertexCount = 0;
 	m->vertexOffset = 0;
 }
 
-
-
-
-
-
 _Check_return_ _Success_(return != NULL)
 /**
 	@brief  Creates a stb_ds darray of meshes read from the paths. All vertex data and index data will be stored sequencialy in the vbo and ebo supplied as parameter.
 	@param  paths - 
-	@param  vbo   - 
-	@param  ebo   - 
+	@param  vbo   - newly created VBO to fill with vertex data
+	@param  ebo   - newly create EBO to fill with vertex data
 	@retval       - 
 **/
 inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _Inout_ const GLuint ebo)
@@ -389,7 +372,7 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 		active.name = NULL;
 		
 		err = fopen_s(&file, p, "r");
-		if (err != NULL)
+		if (err != 0)
 			goto CLEANUP_INVALID;
 		obj = wavefront_obj_read(file);
 		assert(obj.vertices != NULL);
@@ -434,12 +417,12 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 			}
 			arrput(active.groups, g);
 		}
-		active.vertexCount = arrlen(obj.vertices);
+		active.vertexCount = (uint32_t)arrlen(obj.vertices);
 		active.vertexOffset = vertexCount;
 		active.indexOffset = indexCount;
 
-		vertexCount += arrlen(obj.vertices);
-		indexCount += arrlen(obj.indices);
+		vertexCount += (uint32_t)arrlen(obj.vertices);
+		indexCount += (uint32_t)arrlen(obj.indices);
 
 		//transfer ownership from obj to verticesV and indicesV
 		arrput(verticesV, obj.vertices);
@@ -462,8 +445,9 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 	glNamedBufferData(vbo, vertexDataSize, NULL, GL_STATIC_DRAW);
 	glNamedBufferData(ebo, indexDataSize, NULL, GL_STATIC_DRAW);
 
-	uint32_t indexOffset = 0;
-	uint32_t vertexOffset = 0;
+	size_t 
+		indexOffset = 0,
+		vertexOffset = 0;
 	for (uint32_t ix = 0; ix < count; ix++)
 	{
 		struct mesh* m = meshes + ix;
@@ -513,9 +497,17 @@ CLEANUP_INVALID:
 	goto CLEANUP;
 }
 
+static GLuint createUBO(GLsizei maxSize, GLenum usage)
+{
+	GLuint ubo;
+	glCreateBuffers(1, &ubo);
+	glNamedBufferData(ubo, maxSize, NULL, usage);
+	return ubo;
+}
 
+#define COMPONENTS(vec) sizeof(vec)/sizeof(float)
 
-void GLAD_API_PTR GLDebugProc(
+static void GLAD_API_PTR GLDebugProc(
 	_In_ GLenum source,
 	_In_ GLenum type,
 	_In_ GLuint id,
@@ -533,13 +525,13 @@ void GLAD_API_PTR GLDebugProc(
 
 /**
 	@brief  Crox Application entry point
-	@param  ctx  - 
-	@param  argC - 
-	@param  argV - 
-	@param  penv - 
+	@param  ctx  - Nuklear Context used with underlaying windowing mechanisms
+	@param  argC - count of command line arguments
+	@param  argV - vector of command line arguments
+	@param  penv - environment varaibles
 	@retval      - 
 **/
-int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_ _TCHAR** penv)
+extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_z_ _TCHAR** penv)
 {
 	bool running = true;
 #ifdef _DEBUG
@@ -548,22 +540,18 @@ int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_ _TC
 #else
 	glEnable(GL_NO_ERROR);
 #endif // _DEBUG
+	mat4 tmp;
 
-	uint32_t width = 0;
-	uint32_t height = 0;
+	uint32_t 
+		width = 0,
+		height = 0;
 	platform_getDimensions(ctx, &width, &height);
 	assert(width != 0 && height != 0);
 	glViewport(0, 0, width, height);
 
-	/*
-#ifdef _DEBUG
-	GLint extCount = 0;
-	glGetIntegerv(GL_NUM_EXTENSIONS, &extCount);
-	for (GLint i = 0; i < extCount; i++) OutputDebugFormatted(_T("\t%hs\n"), (const char*)glGetStringi(GL_EXTENSIONS, i));
-	OutputDebugFormatted(_T("%hs\n"), wglGetExtensionsStringEXT());
-#endif // _DEBUG
-*/
-
+	//
+	// Setup Shaders
+	//
 
 	GLuint program = makeProgramSPIRV(
 		"3D_vert.spv", 
@@ -572,66 +560,92 @@ int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_ _TC
 		NULL, 
 		"3D_frag.spv");
 	assert(program != 0);
-	NAME_OBJECT(GL_PROGRAM, program, "<Basic 3D Program>");
+	NAME_OBJECT(GL_PROGRAM, program, "<Blinn-Phong Shading Program>");
 
 	glReleaseShaderCompiler();
 	
-	/*
-	//setup program using <3D.vert> + <3D.frag>
-	{
+	//
+	// The Following Buffers pertain to the Blinn-Phong Shading Program:
+	//
 
+	GLuint
+		  matrixUBO = createUBO(3 * sizeof(mat4), 
+			  GL_DYNAMIC_DRAW),
+		  cameraUBO = createUBO(1 * sizeof(vec4), 
+			  GL_DYNAMIC_DRAW),
+		lightingUBO = createUBO(2 * sizeof(vec4), 
+			GL_DYNAMIC_DRAW),
+		materialUBO = createUBO(3 * sizeof(vec4) + 2 * sizeof(float), 
+			GL_DYNAMIC_DRAW);
+	
+	if (  matrixUBO) NAME_OBJECT(GL_BUFFER,   matrixUBO,          "<Matrix Uniform Buffer>");
+	if (  cameraUBO) NAME_OBJECT(GL_BUFFER,   cameraUBO, "<Camera Position Uniform Buffer>");
+	if (lightingUBO) NAME_OBJECT(GL_BUFFER, lightingUBO, "<Global Lighting Uniform Buffer>");
+	if (materialUBO) NAME_OBJECT(GL_BUFFER, materialUBO, "<Mesh's Material Uniform Buffer>");
 
-		GLuint
-			vShader = makeShader(GL_VERTEX_SHADER, "3D_vert.spv"),
-			fShader = makeShader(GL_FRAGMENT_SHADER, "3D.frag");
-		assert(vShader != 0);
-		assert(fShader != 0);
+	//
+	//  Variables that in the future will be configurable
+	//
 
-		glAttachShader(program, vShader);
-		glAttachShader(program, fShader);
+	vec3 lightPos = { 5, 5, 0 };
+	vec3 lightColor = { 1, 1, 1 };
 
-		glLinkProgram(program);
+	const vec3 BEGIN_POS = { 0,0,-10 }; //TODO config
+	const float speed = .1f;			//TODO config
+	const float sensitivity = 0.001f;	//TODO config / setting
+	const float FOV = toRadians(45.0f);//TODO config
 
-		GLuint isLinked = false;
-		glGetProgramiv(program, GL_LINK_STATUS, &isLinked);
-		assert(isLinked);
-
-		glDetachShader(program, vShader);
-		glDetachShader(program, fShader);
-		glDeleteShader(vShader);
-		glDeleteShader(fShader);
-	}
-	*/
+	struct Camera cam = { 0 };
+	camera_projection_perspective(&cam, 
+		FOV,		
+		(float)width / height, 
+		.1f,			//TODO config 
+		100.0f);		//TODO config
+	camera_worldPosition_set(&cam, BEGIN_POS);
+	camera_direction_set(&cam, NULL);
+	
+	//
+	// Create Meshes
+	//
 
 	GLuint vao;
 	glCreateVertexArrays(1, &vao);
 	assert(vao != 0);
-	NAME_OBJECT(GL_VERTEX_ARRAY, vao, "<Mesh Vertex Array>");
+	NAME_OBJECT(GL_VERTEX_ARRAY, vao, "<Batch Vertex Array Object>");
 
 	GLuint vbo;
 	glCreateBuffers(1, &vbo);
 	assert(vbo != 0);
-	NAME_OBJECT(GL_BUFFER, vbo, "<Mesh Vertices>");
+	NAME_OBJECT(GL_BUFFER, vbo, "<Mesh Batch Vertices>");
 
 	GLuint ebo;
 	glCreateBuffers(1, &ebo);
 	assert(ebo != 0);
-	NAME_OBJECT(GL_BUFFER, ebo, "<Mesh Indices>");
+	NAME_OBJECT(GL_BUFFER, ebo, "<Mesh Batch Indices>");
 
 
-
+	//BIG TODO: fix this mess..., probably make it configurable too.
 	Path* paths = NULL;
-	arrput(paths, "../rsc/mesh/biplane/biplane.obj");
-	arrput(paths, "../rsc/mesh/cube.obj");
-	arrput(paths, "../rsc/mesh/globe.obj");
-	arrput(paths, "../rsc/mesh/Suzanne.obj");
-	arrput(paths, "../rsc/mesh/teapot.obj");
-	arrput(paths, "../rsc/mesh/sphere.obj");
+	arrput(paths, "../../../rsc/mesh/biplane/biplane.obj");
+	arrput(paths, "../../../rsc/mesh/cube.obj");
+	arrput(paths, "../../../rsc/mesh/globe.obj");
+	arrput(paths, "../../../rsc/mesh/Suzanne.obj");
+	arrput(paths, "../../../rsc/mesh/teapot.obj");
+	arrput(paths, "../../../rsc/mesh/sphere.obj");
 
 	struct mesh* meshes = createMeshes(paths, vbo, ebo);
-	arrfree(paths);
-
 	assert(meshes != NULL);
+	arrfree(paths);
+	
+	mat4x4_identity(meshes[0].matrix);
+	//model = translation * rotation * scale 
+	mat4x4_mul(meshes[1].matrix,
+		mat4x4_translate(meshes[1].matrix, lightPos[0], lightPos[1], lightPos[2]),
+		mat4x4_scale(tmp, mat4x4_identity(tmp), .1f));
+	mat4x4_translate(meshes[2].matrix, 0, 5, 5);
+	mat4x4_translate(meshes[3].matrix, 0, 0, 10);
+	mat4x4_translate(meshes[4].matrix, 15, 0, 0);
+	mat4x4_translate(meshes[5].matrix, 5, 5, 5);
 
 	for (uint32_t ix = 0; ix < arrlen(meshes); ix++)
 	{
@@ -640,62 +654,41 @@ int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_ _TC
 		m->vao = vao;
 	}
 
+	//
+	// Specify Vertex Format
+	//
 	GLuint ixBind = 0;
 	size_t offset = 0L;
-	size_t stride = sizeof(struct Vertex);
+	GLsizei stride = sizeof(struct Vertex);
 	glVertexArrayVertexBuffer (vao, ixBind, vbo, offset, stride);
 	glVertexArrayElementBuffer(vao, ebo);
 
 	// layout(location = 0) in vec3 aXYZ
 	glVertexArrayAttribBinding(vao, 0, ixBind);
-	glVertexArrayAttribFormat (vao, 0, 3, GL_FLOAT, false, offsetof(struct Vertex, pos));
+	glVertexArrayAttribFormat (vao, 0, COMPONENTS(vec3), GL_FLOAT, false, offsetof(struct Vertex, pos));
 	glEnableVertexArrayAttrib (vao, 0);
 
 	// layout(location = 1) in vec3 aIJK
 	glVertexArrayAttribBinding(vao, 1, ixBind);
-	glVertexArrayAttribFormat (vao, 1, 3, GL_FLOAT, false, offsetof(struct Vertex, normal));
+	glVertexArrayAttribFormat (vao, 1, COMPONENTS(vec3), GL_FLOAT, false, offsetof(struct Vertex, normal));
 	glEnableVertexArrayAttrib (vao, 1);
 
 	// layout(location = 2) in vec2 aUV
 	glVertexArrayAttribBinding(vao, 2, ixBind);
-	glVertexArrayAttribFormat (vao, 2, 2, GL_FLOAT, false, offsetof(struct Vertex, texcoord0));
+	glVertexArrayAttribFormat (vao, 2, COMPONENTS(vec2), GL_FLOAT, false, offsetof(struct Vertex, texcoord0));
 	glEnableVertexArrayAttrib (vao, 2);
 
-	vec3 lightPos = { 5, 5, 0 };
-	vec3 lightColor = { 1, 1, 1 };
-
-	mat4 tmp;
-
-	mat4x4_identity(meshes[0].matrix);
-	
-	//model = translation * rotation * scale 
-	mat4x4_mul(meshes[1].matrix, 
-		mat4x4_translate(meshes[1].matrix, lightPos[0], lightPos[1], lightPos[2]), 
-		mat4x4_scale(tmp, mat4x4_identity(tmp), .1f));
-	
-	mat4x4_translate(meshes[2].matrix, 0, 5, 5);
-	mat4x4_translate(meshes[3].matrix, 0, 0, 10);
-
-	mat4x4_translate(meshes[4].matrix, 15, 0, 0);
-
-	mat4x4_translate(meshes[5].matrix, 5, 5, 5);
-
-	vec3 pos = {0,0,-10};
-	vec3 dir = {0,0,1};
-	const vec3 UP = { 0,1,0 };
-	float speed = .1f;
-
-	struct Camera cam = { 0 };
-	camera_projection_perspective(&cam, M_PI / 4, (float)width / height, .1, 100);
-	camera_view_set(&cam, pos, dir);
+	//
+	// Render loop variables
+	//
 
 	bool hasRightClick = false;
 	struct nk_vec2 rightClickOrgin;
+	
 	GLuint activeProgram = 0;
 	GLuint activeVAO = 0;
-	int result = 0;
-
-	uint64_t lastRender;
+	uint64_t lastRender=0;
+	int returnstatus = 0;
 
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
@@ -710,11 +703,16 @@ int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_ _TC
 	{
 #pragma region Input Handling
 		nk_input_begin(ctx);
-		running = platform_pollMessages(ctx, &result);
+		running = platform_pollMessages(ctx, &returnstatus);
 		if (!running) break; // Avoid swapping deleted buffers
 
+		//
+		// Handle Mouse and Key inputs
+		//
 
 		struct nk_mouse mouse = ctx->input.mouse;
+		float scrollDelta = mouse.scroll_delta.y;
+		struct nk_input* in = &ctx->input;
 
 		if (mouse.buttons[NK_BUTTON_RIGHT].down)
 		{
@@ -725,37 +723,18 @@ int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_ _TC
 			}
 			else
 			{
-				float dX = mouse.pos.x - rightClickOrgin.x;
-				float dY = mouse.pos.y - rightClickOrgin.y;
+				float dX = mouse.pos.x - rightClickOrgin.x; //in mouse coordinates
+				float dY = mouse.pos.y - rightClickOrgin.y; //in mouse coordinates
 
-				float yaw  = toRadians( 0.001 * (dX ) / width);
-				float pitch= toRadians( 0.001 * (dY ) / height);
-				
-				//vertically:
-				//newDir = rotate(dir, -yaw, |dir x up|) = rotate(-yaw * |dir x up|) * dir
+				float yaw  = toRadians( sensitivity * (dX ) / width);
+				float pitch= toRadians( sensitivity * (dY ) / height);
 
-				vec3 right; 
-				mat4 tmpM;
+				//
+				// Note: input parameters say dX when dY is used to create the pitch constant; dX refers to the X pseudo-vector corresponding to the pitch axis, while the dY in this example refers to the moues movement
+				//		
 
-				vec3_norm(right, vec3_mul_cross(right, dir, UP));
-				mat4x4_rotate(tmpM, mat4x4_identity(tmpM), right[0], right[1], right[2], -pitch);
-
-				vec4 newDir;
-				mat4x4_mul_vec4(newDir, tmpM, dir);
-
-				float ang = vec3_angle(newDir, UP);
-				float dAng = vec3_angle(newDir, dir);
-
-				//don't allow upside down rotation
-				if (fabs(vec3_angle(newDir, UP)) - toRadians(90) <= toRadians(85))
-					vec3_dup(dir, newDir);
-
-				// horizontally:
-				// dir = rotate(dir, -yaw, Up)
-
-				vec4 newDir2;
-				mat4x4_mul_vec4(newDir2, mat4x4_rotate(tmpM, mat4x4_identity(tmpM), UP[0], UP[1], UP[2], -yaw), newDir);
-				vec3_dup(dir, newDir2);
+				camera_pitch_limited(&cam, -pitch, toRadians(85.0f)); //go CCW
+				camera_yaw(&cam, -yaw);
 			}
 		}
 		else
@@ -763,38 +742,36 @@ int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_ _TC
 			hasRightClick = false;
 		}
 
-		float scrollDelta = mouse.scroll_delta.y;
+		
+		vec3 direction = { 0,0,0 };
 		if (scrollDelta)
 		{
 			vec3 tmp;
-			vec3_add(dir, dir, vec3_scale(tmp, dir, scrollDelta / 10));
-
+			camera_move_local(&cam, vec3_scale(tmp, cam.wDir, scrollDelta / 10));
 		}
-
-		struct nk_input* in = &ctx->input;
 		for (int i = 0; i < in->keyboard.text_len; i++)
 		{
 			char c = in->keyboard.text[i];
 
-			vec3 temp;
-
 			if (c == 'w')
-				vec3_add(pos, pos, vec3_scale(temp, dir, speed));
+				direction[2] += 1;
 			else if (c == 's')
-				vec3_add(pos, pos, vec3_scale(temp, dir, -speed));
+				direction[2] -= 1;
+
 			else if (c == 'a')
-				vec3_add(pos, pos, vec3_scale(temp, vec3_norm(temp, vec3_mul_cross(temp, UP, dir)), speed));
+				direction[0] += 1;
 			else if (c == 'd')
-				vec3_add(pos, pos, vec3_scale(temp, vec3_norm(temp, vec3_mul_cross(temp, UP, dir)), -speed));
+				direction[0] -= 1;
+
 			else if (c == 'e')
-				vec3_add(pos, pos, vec3_scale(temp, UP, speed));
+				direction[1] += 1;
 			else if (c == 'q')
-				vec3_add(pos, pos, vec3_scale(temp, UP, -speed));
-
-			
+				direction[1] -= 1;
 		}
-		camera_view_set(&cam, pos, dir);
-
+		if (vec3_len(direction) != 0)
+		{
+			camera_move_local(&cam, vec3_scale(direction, direction, speed / vec3_len(direction)));
+		}
 		
 		nk_input_end(ctx);
 #pragma endregion
@@ -808,68 +785,115 @@ int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_ _TC
 				width = nwidth;
 				height = nheight;
 				glViewport(0, 0, width, height);
-				camera_projection_perspective(&cam, M_PI / 4, (float)width / height, .1, 100);
+				camera_projection_perspective(&cam, 
+					FOV, 
+					(float)width / height, 
+					.1f, 
+					100.0f);
 			}
 		}
 		
-
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		
-		uint32_t meshCount = arrlen(meshes);
-		for (uint32_t ixM = 0; ixM < meshCount; ixM++)
+		size_t meshCount = arrlen(meshes);
+		for (uint32_t ixMesh = 0; ixMesh < meshCount; ixMesh++)
 		{
-			struct mesh* mesh = meshes + ixM;
+			struct mesh* mesh = meshes + ixMesh;
+
+			//
+			// Setup Graphics Pipeline state
+			//
 
 			if (mesh->program != activeProgram)
 			{
 				glUseProgram(mesh->program);
 				activeProgram = mesh->program;
-
 			}
-
 			if (mesh->vao != activeVAO)
 			{
 				activeVAO = mesh->vao;
 				glBindVertexArray(mesh->vao);
 			}
 
-			GLint
-				camPosLocation = glGetUniformLocation(activeProgram, "u_camPos"),
-				lightPosLocation = glGetUniformLocation(activeProgram, "u_lightPos"),
-				lightColorLocation = glGetUniformLocation(activeProgram, "u_lightColor");
+			//
+			// Update Uniform buffers
+			//
 
-			if (camPosLocation != -1)
-				glProgramUniform3fv(activeProgram, camPosLocation, 1, pos);
-			if (lightPosLocation != -1)
-				glProgramUniform3fv(activeProgram, lightPosLocation, 1, lightPos);
-			if (lightColorLocation != -1)
-				glProgramUniform3fv(activeProgram, lightColorLocation, 1, lightColor);
-
-
-			mat4 model;
+			mat4 model; //model matrix
 			mat4x4_dup(model, mesh->matrix);
-
-			mat4 matrix;//model matrix
-			mat4x4_mul(matrix, cam.matrix, model); //matrix = cam's matrix * E
 
 			mat4 normalMatrix; // = mat3(transpose(inverse(model)))
 			mat4x4_transpose(normalMatrix, mat4x4_invert(normalMatrix, model));
 
+			mat4 matrix; //projection * view * model 
+			mat4x4_mul(matrix, cam.matrix, model); //matrix = cam's matrix * E			
+
 			GLint
-				modelMatrixLocation = glGetUniformLocation(activeProgram, "u_model"),
-				projectionViewModelMatrixLocation = glGetUniformLocation(activeProgram, "u_matrix"),
-				normalMatrixLocation = glGetUniformLocation(activeProgram, "u_normalMatrix");
-
-			if (modelMatrixLocation != -1)
-				glProgramUniformMatrix4fv(activeProgram, modelMatrixLocation, 1, false, model);
-			if (projectionViewModelMatrixLocation != -1)
-				glProgramUniformMatrix4fv(activeProgram, projectionViewModelMatrixLocation, 1, false, matrix);
-			if (normalMatrixLocation != -1)
-				glProgramUniformMatrix4fv(activeProgram, normalMatrixLocation, 1, false, normalMatrix);
+				  ixMatrixBlock = glGetUniformBlockIndex(activeProgram,   "MatrixBlock"),
+				  ixCameraBlock = glGetUniformBlockIndex(activeProgram,   "CameraBlock"),
+				ixLightingBlock = glGetUniformBlockIndex(activeProgram, "LightingBlock"),
+				ixMaterialBlock = glGetUniformBlockIndex(activeProgram, "MaterialBlock");
 			
+			if (ixMatrixBlock != -1)
+			{
+				uint8_t* block = (uint8_t*)glMapNamedBuffer(matrixUBO, GL_WRITE_ONLY);
+				{
+					memcpy(block + 0 * sizeof(mat4), matrix, sizeof matrix);
+					
+					memcpy(block + 1 * sizeof(mat4), model, sizeof model);
+					
+					memcpy(block + 2 * sizeof(mat4), normalMatrix, sizeof normalMatrix);
+				}
+				GLboolean notCorrupted = glUnmapNamedBuffer(matrixUBO);
+				
+				if (!notCorrupted)
+				{
+					//deal with corruption
+					GLint size;
+					glGetNamedBufferParameteriv(matrixUBO, GL_BUFFER_SIZE, &size);
+					glDeleteBuffers(1, &matrixUBO);
+					matrixUBO = createUBO(size, GL_DYNAMIC_DRAW);
+					__debugbreak();
+					continue; //give a chance to set the values again in the new buffer
+				}
 
-			uint32_t groupCount = arrlen(mesh->groups);
+				glBindBufferBase(GL_UNIFORM_BUFFER, 0, matrixUBO);
+			}
+			if (ixCameraBlock != -1)
+			{			
+				uint8_t* block = (uint8_t*)glMapNamedBuffer(cameraUBO, GL_WRITE_ONLY);
+				{
+					memcpy(block, cam.wPos, sizeof cam.wPos);
+				}
+				GLboolean notCorrupted = glUnmapNamedBuffer(cameraUBO);
+				assert(notCorrupted); //TODO
+
+				glBindBufferBase(GL_UNIFORM_BUFFER, 1, cameraUBO);
+			}
+			if (ixLightingBlock != -1)
+			{ 			
+				uint8_t* block = (uint8_t*)glMapNamedBuffer(lightingUBO, GL_WRITE_ONLY);
+				{
+					//u_lightPos
+					memcpy(block + 0 * sizeof(vec4), lightPos, sizeof lightPos);
+					//u_lightColor
+					memcpy(block + 1 * sizeof(vec4), lightColor, sizeof lightColor);
+				}
+				GLboolean notCorrupted = glUnmapNamedBuffer(lightingUBO);
+				assert(notCorrupted); //TODO
+				
+				glBindBufferBase(GL_UNIFORM_BUFFER, 2, lightingUBO);
+			}
+			if (ixMaterialBlock != -1)
+			{
+				glBindBufferBase(GL_UNIFORM_BUFFER, 3, materialUBO);
+			}
+
+			//
+			// Setup the material for each group and draw.
+			//
+
+			size_t groupCount = arrlen(mesh->groups);
 			if (groupCount == 0)
 			{
 				glDrawArrays(GL_TRIANGLES, mesh->vertexOffset, mesh->vertexCount);
@@ -878,27 +902,39 @@ int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_ _TC
 			{
 				struct group g = mesh->groups[ixG];
 
-				if (g.hasMaterial)
+				if (ixMaterialBlock != -1)
 				{
-					GLint
-						ambientColorLocation = glGetUniformLocation(activeProgram, "u_ambientColor"),
-						diffuseColorLocation = glGetUniformLocation(activeProgram, "u_diffuseColor"),
-						specularColorLocation= glGetUniformLocation(activeProgram, "u_specularColor"),
-						alphaLocation		 = glGetUniformLocation(activeProgram, "u_alpha"),
-						shininessLocation	 = glGetUniformLocation(activeProgram, "u_shininess");
+					//TODO: make it so that each material has its own UBO that just needs to be bound and unbound.
 
-					if (ambientColorLocation != -1)
-						glProgramUniform3fv(activeProgram, ambientColorLocation, 1, g.mtl.ambient);
-					if (diffuseColorLocation != -1) 
-						glProgramUniform3fv(activeProgram, diffuseColorLocation, 1, g.mtl.diffuse);
-					if (specularColorLocation != -1)
-						glProgramUniform3fv(activeProgram, specularColorLocation,1, g.mtl.specular);
-					if(alphaLocation != -1)
-						glProgramUniform1f(activeProgram, alphaLocation, g.mtl.alpha);
-					if(shininessLocation != -1)
-						glProgramUniform1f(activeProgram, shininessLocation, g.mtl.shininess);
+					vec3 DEFAULT_AMBIENT = { 0.1f, 0.1f, 0.1f };
+					vec3 DEFAULT_DIFFUSE = { 0.8f, 0.8f, 0.8f };
+					vec3 DEFAULT_SPECULAR= { 0.8f, 0.8f, 0.8f };
+					float DEFAULT_SHININESS = 1.45f;
+					float DEFAULT_ALPHA = 1.0f;
+
+					uint8_t* block = (uint8_t*)glMapNamedBuffer(materialUBO, GL_WRITE_ONLY);
+					{
+						size_t offset = 0;
+						//u_ambientColor
+						memcpy(block + offset, g.hasMaterial ? g.mtl.ambient : DEFAULT_AMBIENT, sizeof(vec3));
+						offset += sizeof(vec4);
+						//u_diffuseColor
+						memcpy(block + offset, g.hasMaterial ? g.mtl.diffuse 	: DEFAULT_DIFFUSE, sizeof(vec3));
+						offset += sizeof(vec4);
+						//u_specularColor
+						memcpy(block + offset, g.hasMaterial ? g.mtl.specular	: DEFAULT_SPECULAR, sizeof(vec3));
+						offset += sizeof(vec4);
+						//u_shininess
+						memcpy(block + offset, g.hasMaterial ? & g.mtl.shininess : &DEFAULT_SHININESS, sizeof(float));
+						offset += sizeof(vec4);
+						//u_alpha
+						memcpy(block + offset, g.hasMaterial ? &g.mtl.alpha	 : &DEFAULT_ALPHA, sizeof(float));
+						offset += sizeof(vec4);
+					}
+					GLboolean notCorrupted = glUnmapNamedBuffer(materialUBO);
+					assert(notCorrupted); //TODO
 				}
-
+				
 				if (mesh->vertexOffset != 0)
 					//
 					// When there are multiple meshes stored in the same vbo and ebo,
@@ -909,22 +945,23 @@ int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _In_ _TC
 					glDrawElements(GL_TRIANGLES, g.count, GL_UNSIGNED_INT, (void*)(sizeof(uint32_t) * (g.ixFirst + mesh->indexOffset)));
 			}
 		}
-		
 
 		BOOL swapSuccess = platform_swapBuffers(ctx);
 		assert(swapSuccess);
 	}
+	
+	//
+	// Cleanup
+	//
 
-
-
-	uint32_t meshCount = arrlen(meshes);
+	size_t meshCount = arrlen(meshes);
 	for (uint32_t i = 0; i < meshCount; i++) destroy_mesh(meshes + i);
 	arrfree(meshes);
 
-	glDeleteBuffers(1, &ebo);
-	glDeleteBuffers(1, &vbo);
+	GLuint buffersToDelete[] = { vbo, ebo, matrixUBO, cameraUBO, lightingUBO, materialUBO };
+	glDeleteBuffers(_countof(buffersToDelete), buffersToDelete);
 	glDeleteVertexArrays(1, &vao);
 	glDeleteProgram(program);
 
-	return result;
+	return returnstatus;
 }

@@ -1,9 +1,9 @@
-#version 460 core
+#version 460
 
 layout(location = 0) out vec4 fragColor;
 
 
-in VData
+layout(location = 0) in VData
 {
 	vec3 pos;
 	vec3 normal;
@@ -12,35 +12,26 @@ in VData
 
  
 
-uniform vec3 u_camPos; 
-
-
-uniform vec3 u_lightPos;
-uniform vec3 u_lightColor; 
-
-struct Material{
-	vec3 ambient;
-	vec3 diffuse;
-	vec3 specular;
-	float alpha;
-	float shininess;
+layout (std140, binding = 1) uniform CameraBlock {
+	vec3 u_camPos; 
 };
 
-struct Light{
-	vec3 pos;
-
-	vec3 ambient;
-	vec3 diffuse;
-	vec3 specular;
+layout (std140, binding = 2) uniform LightingBlock {
+	vec3 u_lightPos;
+	vec3 u_lightColor; 
 };
 
-uniform vec3 u_ambientColor = vec3(0.1, 0.1, 0.1); 
-uniform vec3 u_diffuseColor = vec3(0.8, 0.8, 0.8);
-uniform vec3 u_specularColor= vec3(0.8, 0.8, 0.8);
+layout (std140, binding = 3) uniform MaterialBlock 
+{
+	vec3 u_ambientColor; // = vec3(0.1, 0.1, 0.1); 
+	vec3 u_diffuseColor; // = vec3(0.8, 0.8, 0.8);
+	vec3 u_specularColor;// = vec3(0.8, 0.8, 0.8);
 
-uniform float u_alpha = 1.0;
-uniform float u_shininess = 1.0;
+	float u_alpha;		 // = 1.0
+	float u_shininess;	 // = 1.45
 
+};
+ 
 void main()
 {
 	vec3 
@@ -51,12 +42,13 @@ void main()
 
 	float 
 		diff = max(dot(fin.normal, lightDir), 0.0),
-		spec = pow(max(dot(halfDir, fin.normal), 0.0), u_shininess);
+		spec = pow(max(dot(halfDir, reflDir), 0.0), u_shininess);
 
 
-	vec3 ambient = u_ambientColor*0.25;
-	vec3 diffuse = u_diffuseColor * diff;
-	vec3 specular= u_specularColor* (diff == 0 ? 0.0 : spec);
+	vec3 
+		ambient = u_ambientColor*0.3,
+		diffuse = u_diffuseColor * diff,
+		specular= u_specularColor* (diff == 0 ? 0.0 : spec);
 
 	vec3 color = (ambient + diffuse + specular) * u_lightColor;
 	fragColor = vec4(color, u_alpha);

@@ -37,7 +37,7 @@ def procedure():
 			outputFileName = f"{name}_{ext.replace('.','')}.spv"
 			
 			if(ext in glslExtensions):
-				print(f"\tCompiling {fileName}")
+				print(f"\tCompiling {fileName} into SPIR-V")
 				#os.remove(path.join(OutDir, outputFileName))
 				subprocess.call([path.join(os.environ['VULKAN_SDK'], 'bin', 'glslc'), fullPath, '-o', path.join(OutDir, outputFileName) ])
 

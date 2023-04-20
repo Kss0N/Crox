@@ -1,34 +1,31 @@
-#version 460 core
+#version 460
 
 layout(location = 0) in vec3 aXYZ;
 layout(location = 1) in vec3 aIJK;
 layout(location = 2) in vec2 aUV;
 
-layout(location = 0) uniform mat4 u_matrix =  mat4(
-1,0,0,0,
-0,1,0,0,
-0,0,1,0,
-0,0,0,1
-); // = Projection * View * Model 
-layout(location = 1) uniform mat4 u_model = mat4(
-1,0,0,0,
-0,1,0,0,
-0,0,1,0,
-0,0,0,1);
-layout(location = 2) uniform mat4 u_normalMatrix; //TODO: make it mat3 on the cpu before uploading it
-
-out VData 
+layout (std140, binding = 0) uniform MatrixBlock
 {
-	vec3 pos;
-	vec3 normal;
-	vec2 tex;
-} vout;
+	mat4 u_matrix; 	// Projection * View * Model matrices
+	mat4 u_model;	// model matrix
+	mat4 u_normal;	// normal = inverse(transpose(model)) matrix
+};
+
+
+
+layout (location = 0) out VData 
+{
+	vec3 pos;		// Vertex pos in world space
+	vec3 normal;	// Normal transformed into world space
+	vec2 tex;		// Texcoord 
+} 
+vout;
 
 void main()
 {
-	gl_Position = u_matrix * vec4(aXYZ, 1.0f);
+	gl_Position = u_matrix * vec4(aXYZ, 1.0);
 
 	vout.pos = vec3(u_model * vec4(aXYZ,1));
-	vout.normal = normalize( mat3(u_normalMatrix) * aIJK );
+	vout.normal = normalize( mat3(u_normal) * aIJK );
 	vout.tex = aUV;
 }

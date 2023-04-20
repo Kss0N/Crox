@@ -243,7 +243,7 @@ extern APIENTRY _tWinMain(
 		};
 		nk_set_user_data(ctx, (nk_handle) { .ptr = &rsc });
 
-		result = main(ctx, argC, argV, pEnv);
+		result = _tmain(ctx, argC, argV, pEnv);
 
 		if (pEnv)
 			FreeEnvironmentStrings(pEnv);
@@ -600,7 +600,8 @@ void toggleFullscreen(NkContext* ctx)
 
 	if (!rsc->isFullscreen)
 	{
-		// set normal
+		// set fullscreen
+
 		MONITORINFO mi = { sizeof(mi) };
 
 		if (GetWindowPlacement(rsc->hMainWnd, &rsc->prevPlacement) &&
