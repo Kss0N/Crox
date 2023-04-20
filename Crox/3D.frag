@@ -44,9 +44,8 @@ void main()
 		diff = max(dot(fin.normal, lightDir), 0.0),
 		spec = pow(max(dot(halfDir, reflDir), 0.0), u_shininess);
 
-
 	vec3 
-		ambient = u_ambientColor*0.3,
+		ambient = u_ambientColor * 0.3,
 		diffuse = u_diffuseColor * diff,
 		specular= u_specularColor* (diff == 0 ? 0.0 : spec);
 

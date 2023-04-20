@@ -110,6 +110,17 @@ static GLuint makeProgramGLSL(
 	return 0;
 }
 
+/**
+	@brief  As it's possible to bind parts of a UBO to a bind position, the parts must be aligned. the alignment is determined by the driver.
+	@retval  - base Alignment for UBO ranges 
+**/
+inline const int32_t getUBOAlignment()
+{
+	int32_t alignment;
+	glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &alignment);
+	return alignment;
+}
+
 static const unsigned char* readBinary(_In_z_ Path p, _Out_ size_t* len)
 {
 	FILE* f;
@@ -301,8 +312,7 @@ struct group {
 	uint32_t ixFirst;
 	uint32_t count;
 
-	bool hasMaterial;
-	struct WavefrontMtl mtl;
+	int32_t ixMaterial;
 };
 
 struct mesh
@@ -337,50 +347,61 @@ void destroy_mesh(struct mesh* m)
 _Check_return_ _Success_(return != NULL)
 /**
 	@brief  Creates a stb_ds darray of meshes read from the paths. All vertex data and index data will be stored sequencialy in the vbo and ebo supplied as parameter.
-	@param  paths - 
-	@param  vbo   - newly created VBO to fill with vertex data
-	@param  ebo   - newly create EBO to fill with vertex data
-	@retval       - 
+	@param  count - count of paths
+	@param  paths - paths to wavefront obj files (file extension MUST be .obj)
+	@param  vbo   - newly created VBO to fill with vertices	data
+	@param  ebo   - newly created EBO to fill with indices	data
+	@param  mtl   - newly created UBO to fill with materials data
+	@retval       - stb_ds darray of meshes.
 **/
-inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _Inout_ const GLuint ebo)
+inline struct mesh* createMeshes(
+	_In_ uint32_t			count, 
+	_In_reads_(count) Path* paths, 
+	_Inout_ const GLuint	vbo, 
+	_Inout_ const GLuint	ebo, 
+	_Inout_ const GLuint	mtl)
 {
 	struct mesh* meshes = NULL;
-	
+
 	uint32_t vertexCount = 0;
 	uint32_t  indexCount = 0;
 	struct Vertex** verticesV = NULL;	// stb_ds Vector of vertex arrays
 	uint32_t** indicesV = NULL;			// stb_ds Vector of element arrays
+	void** materials = NULL;			// stb_ds Vector of material buffers
+
+	uint32_t materialCount = 0;
+
 
 	struct WavefrontObj obj;
 	struct WavefrontMtllib mtllib;
 
 	char* mtllibPath = _aligned_malloc(MAX_PATH, 8);
 
-	struct mesh active;
-	Path p;
+	const int32_t UBO_ALIGNMENT = getUBOAlignment();
 
-	uint32_t count = (uint32_t)arrlen(paths);
+	struct mesh active;
+	Path path;
 	for (uint32_t ix = 0;
 		ix < count;
 		++ix, wfDestroyObj(&obj), wfDestroyMtllib(&mtllib))
 	{
-		p = paths[ix];
+		path = paths[ix];
 		FILE* file;
 		errno_t err;  
 
 		active.groups = NULL;
 		active.name = NULL;
 		
-		err = fopen_s(&file, p, "r");
+		err = fopen_s(&file, path, "r");
 		if (err != 0)
 			goto CLEANUP_INVALID;
 		obj = wavefront_obj_read(file);
 		assert(obj.vertices != NULL);
 		fclose(file);
 
-		if (obj.mtllib != NULL)
+		if (obj.mtllib)
 		{
-			cwk_path_change_basename(p, obj.mtllib, mtllibPath, MAX_PATH);
+			cwk_path_change_basename(path, obj.mtllib, mtllibPath, MAX_PATH);
 			err = fopen_s(&file, mtllibPath, "r");
 			if (err != 0)
 				goto CLEANUP_INVALID;
@@ -388,8 +409,6 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 			assert(mtllib.keys != NULL);
 			fclose(file);
 		}
-		
-
 		if (obj.name)
 		{
 			//Let's be a bit clever and just transfer ownership.
@@ -400,23 +419,61 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 		
 		OutputDebugFormatted(_T("Creating mesh \"%hs\".\n"), active.name ? active.name : "NONAME");
 
-		uint32_t groupCount = (uint32_t)arrlen(obj.groups);
+		const uint32_t mtlCount = (uint32_t)shlenu(mtllib.materialMap);
+		const uint32_t mtlOffset = (uint32_t)arrlenu(materials);
+
+		arrsetlen(materials, arrlenu(materials) + mtlCount);
+		
+		
+		const uint32_t groupCount = (uint32_t)arrlenu(obj.groups);
 		for (uint32_t ixG = 0; ixG < groupCount; ixG++)
 		{
 			struct WavefrontGroup* group = obj.groups + ixG;
+			
 			struct group g = {
-				.ixFirst = group->ixFirst,
-				.count = group->count,
-				.hasMaterial = false,
+				.ixFirst	= group->ixFirst,
+				.count		= group->count,
+				.ixMaterial = -1,
 			};
 
-			if (obj.mtllib != NULL)
+			const struct WavefrontMtl* pMaterial = &shgetp(mtllib.materialMap, group->mtlName)->value;
+			const uint32_t ixMtl = shgeti(mtllib.materialMap, group->mtlName);
+			if (ixMtl != -1)
 			{
-				g.hasMaterial = true;
-				g.mtl = shget(mtllib.materialMap, group->mtlName);
+				//NOTE: materials are specified per the uniform `MaterialBlock` in file `3D.frag`
+				//TODO: make this more "shader agnostic"
+
+				uint8_t* mtlBuf = (uint8_t*)_aligned_malloc(0x80, UBO_ALIGNMENT);
+				if (!mtlBuf) continue; //then it will just use the default material.
+
+				size_t offset = 0;
+
+				//u_ambientColor
+				memcpy(mtlBuf + offset, &pMaterial->ambient, sizeof(vec3));
+				offset += sizeof(vec4);
+
+				//u_diffuseColor
+				memcpy(mtlBuf + offset, &pMaterial->diffuse, sizeof(vec3));
+				offset += sizeof(vec4);
+
+				//u_specularColor
+				memcpy(mtlBuf + offset, &pMaterial->specular, sizeof(vec3));
+				offset += sizeof(vec3);
+
+				//u_alpha
+				memcpy(mtlBuf + offset, &pMaterial->alpha, sizeof(float));
+				offset += sizeof(float);
+
+				//u_shininess
+				memcpy(mtlBuf + offset, &pMaterial->shininess, sizeof(float));
+
+				const uint32_t ixMaterial = mtlOffset + ixMtl;
+				materials[ixMaterial] = (void*)mtlBuf;
+				g.ixMaterial = ixMaterial;
 			}
 			arrput(active.groups, g);
 		}
+		
 		active.vertexCount = (uint32_t)arrlen(obj.vertices);
 		active.vertexOffset = vertexCount;
 		active.indexOffset = indexCount;
@@ -430,9 +487,6 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 		obj.vertices = NULL;
 		obj. indices = NULL;
 
-		
-		
-
 		//finalize and append mesh
 		arrput(meshes, active);
 	}
@@ -441,9 +495,10 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 
 	size_t vertexDataSize = sizeof(struct Vertex) * vertexCount;
 	size_t  indexDataSize = sizeof(uint32_t) * indexCount;
-
+	
 	glNamedBufferData(vbo, vertexDataSize, NULL, GL_STATIC_DRAW);
-	glNamedBufferData(ebo, indexDataSize, NULL, GL_STATIC_DRAW);
+	glNamedBufferData(ebo,  indexDataSize, NULL, GL_STATIC_DRAW);
+	glNamedBufferData(mtl, arrlenu(materials) * UBO_ALIGNMENT, NULL, GL_STATIC_DRAW);
 
 	size_t 
 		indexOffset = 0,
@@ -472,7 +527,17 @@ inline struct mesh* createMeshes(_In_ Path* paths, _Inout_ const GLuint vbo, _In
 	assert(indexOffset == indexCount);
 	assert(vertexOffset == vertexCount);
 
+	size_t mtlOffset = 0;
+	for (uint32_t i = 0; i < arrlenu(materials); i++)
+	{
+		glNamedBufferSubData(mtl, i * UBO_ALIGNMENT, UBO_ALIGNMENT, materials[i]);
+	}
+
 CLEANUP:
+	for (uint32_t i = 0; i < arrlenu(materials); i++)
+	{
+		_aligned_free(materials[i]);
+	}
 	for (uint32_t i = 0; i < arrlen(verticesV); i++)
 	{
 		arrfree(verticesV[i]);
@@ -485,7 +550,7 @@ CLEANUP:
 
 CLEANUP_INVALID:
 
-	OutputDebugFormatted(_T("Failed to read object in \"%hs\""), p);
+	OutputDebugFormatted(_T("Failed to read object in \"%hs\""), path);
 
 	wfDestroyObj(&obj);
 	wfDestroyMtllib(&mtllib);
@@ -569,41 +634,80 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	//
 
 	GLuint
-		  matrixUBO = createUBO(3 * sizeof(mat4), 
-			  GL_DYNAMIC_DRAW),
-		  cameraUBO = createUBO(1 * sizeof(vec4), 
-			  GL_DYNAMIC_DRAW),
-		lightingUBO = createUBO(2 * sizeof(vec4), 
+				  matrixUBO	= createUBO(3 * sizeof(mat4), 
 			GL_DYNAMIC_DRAW),
-		materialUBO = createUBO(3 * sizeof(vec4) + 2 * sizeof(float),
-			GL_DYNAMIC_DRAW);
+
+				  cameraUBO	= createUBO(1 * sizeof(vec4), 
+			GL_DYNAMIC_DRAW),
+
+				lightingUBO	= createUBO(2 * sizeof(vec4), 
+			GL_DYNAMIC_DRAW),
+
+		defaultMaterialUBO	= createUBO(5 * sizeof(vec4),
+			GL_STATIC_DRAW);
 	
-	if (  matrixUBO) NAME_OBJECT(GL_BUFFER,   matrixUBO,          "<Matrix Uniform Buffer>");
-	if (  cameraUBO) NAME_OBJECT(GL_BUFFER,   cameraUBO, "<Camera Position Uniform Buffer>");
-	if (lightingUBO) NAME_OBJECT(GL_BUFFER, lightingUBO, "<Global Lighting Uniform Buffer>");
-	if (materialUBO) NAME_OBJECT(GL_BUFFER, materialUBO, "<Mesh's Material Uniform Buffer>");
+	if			(matrixUBO)	NAME_OBJECT(GL_BUFFER,			matrixUBO,					 "<Matrix Uniform Buffer>");
+	if			(cameraUBO)	NAME_OBJECT(GL_BUFFER,			cameraUBO,			"<Camera Position Uniform Buffer>");
+	if		  (lightingUBO)	NAME_OBJECT(GL_BUFFER,		  lightingUBO,			"<Global Lighting Uniform Buffer>");
+	if (defaultMaterialUBO) NAME_OBJECT(GL_BUFFER, defaultMaterialUBO, "<Defautlt Mesh's Material Uniform Buffer>");
 
 	//
 	//  Variables that in the future will be configurable
 	//
 
-	vec3 lightPos = { 5, 5, 0 };
-	vec3 lightColor = { 1, 1, 1 };
+	const vec3  DEFAULT_AMBIENT  = { 0.1f, 0.1f, 0.1f };
+	const vec3  DEFAULT_DIFFUSE  = { 0.8f, 0.8f, 0.8f };
+	const vec3  DEFAULT_SPECULAR = { 0.8f, 0.8f, 0.8f };
+	const float DEFAULT_SHININESS= 1.45f;
+	const float DEFAULT_ALPHA	 = 1.0f;
 
-	const vec3 BEGIN_POS = { 0,0,-10 }; //TODO config
-	const float speed = .1f;			//TODO config
-	const float sensitivity = 0.001f;	//TODO config / setting
-	const float FOV = toRadians(45.0f);//TODO config
+	const vec3 lightPos = { 5, 5, 0 };
+	const vec3 lightColor = { 1, 1, 1 };
+
+	const vec3 BEGIN_POS = { 0,0,-10 };		
+	const float speed = .1f;				
+	const float sensitivity = 0.001f;		
+	const float FOV = toRadians(45.0f);
+	const float zNear = .1f;
+	const float zFar = 100.0f;
 
 	struct Camera cam = { 0 };
 	camera_projection_perspective(&cam, 
 		FOV,		
 		(float)width / height, 
-		.1f,			//TODO config 
-		100.0f);		//TODO config
+		zNear,			
+		zFar);		
 	camera_worldPosition_set(&cam, BEGIN_POS);
 	camera_direction_set(&cam, NULL);
-	
+
+	uint8_t* block = glMapNamedBuffer(defaultMaterialUBO, GL_WRITE_ONLY);
+	{
+		size_t offset = 0;
+
+		//u_ambientColor
+		memcpy(block + offset,	 DEFAULT_AMBIENT, sizeof(vec3));
+		offset += sizeof(vec4);
+
+		//u_diffuseColor
+		memcpy(block + offset,   DEFAULT_DIFFUSE, sizeof(vec3));
+		offset += sizeof(vec4);
+
+		//u_specularColor
+		memcpy(block + offset,	 DEFAULT_SPECULAR, sizeof(vec3));
+		offset += sizeof(vec3);
+
+		//u_alpha
+		memcpy(block + offset,  &DEFAULT_ALPHA,		sizeof(float));
+		offset += sizeof(float);
+
+		//u_shininess
+		memcpy(block + offset,	&DEFAULT_SHININESS, sizeof(float));	
+	}
+	GLboolean notCorrupted = glUnmapNamedBuffer(defaultMaterialUBO);
+	assert(notCorrupted);
+
+
+
 	//
 	// Create Meshes
 	//
@@ -613,29 +717,34 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	assert(vao != 0);
 	NAME_OBJECT(GL_VERTEX_ARRAY, vao, "<Batch Vertex Array Object>");
 
-	GLuint vbo;
+	GLuint vbo; // Vertices
 	glCreateBuffers(1, &vbo);
 	assert(vbo != 0);
 	NAME_OBJECT(GL_BUFFER, vbo, "<Mesh Batch Vertices>");
 
-	GLuint ebo;
+	GLuint ebo; // Indices
 	glCreateBuffers(1, &ebo);
 	assert(ebo != 0);
 	NAME_OBJECT(GL_BUFFER, ebo, "<Mesh Batch Indices>");
 
+	GLuint mtls; // Materials
+	glCreateBuffers(1, &mtls);
+	assert(mtls != 0);
+	NAME_OBJECT(GL_BUFFER, mtls,"<Mesh Batch Materials>");
 
-	//BIG TODO: fix this mess..., probably make it configurable too.
-	Path* paths = NULL;
-	arrput(paths, "../../../rsc/mesh/biplane/biplane.obj");
-	arrput(paths, "../../../rsc/mesh/cube.obj");
-	arrput(paths, "../../../rsc/mesh/globe.obj");
-	arrput(paths, "../../../rsc/mesh/Suzanne.obj");
-	arrput(paths, "../../../rsc/mesh/teapot.obj");
-	arrput(paths, "../../../rsc/mesh/sphere.obj");
 
-	struct mesh* meshes = createMeshes(paths, vbo, ebo);
+	//BIG TODO: fix this mess... and make it configurable too.
+	Path paths[] = {
+		"../../../rsc/mesh/biplane/biplane.obj",
+		"../../../rsc/mesh/cube.obj",
+		"../../../rsc/mesh/globe.obj",
+		"../../../rsc/mesh/Suzanne.obj",
+		"../../../rsc/mesh/teapot.obj",
+		"../../../rsc/mesh/sphere.obj"
+	};
+
+	struct mesh* meshes = createMeshes(_countof(paths), paths, vbo, ebo, mtls);
 	assert(meshes != NULL);
-	arrfree(paths);
 	
 	mat4x4_identity(meshes[0].matrix);
 	//model = translation * rotation * scale 
@@ -657,6 +766,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	//
 	// Specify Vertex Format
 	//
+
 	GLuint ixBind = 0;
 	size_t offset = 0L;
 	GLsizei stride = sizeof(struct Vertex);
@@ -681,6 +791,8 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	//
 	// Render loop variables
 	//
+
+	const int32_t UBO_ALIGNMENT = getUBOAlignment();
 
 	bool hasRightClick = false;
 	struct nk_vec2 rightClickOrgin;
@@ -788,8 +900,8 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 				camera_projection_perspective(&cam, 
 					FOV, 
 					(float)width / height, 
-					.1f, 
-					100.0f);
+					zNear, 
+					zFar);
 			}
 		}
 		
@@ -884,10 +996,6 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 				
 				glBindBufferBase(GL_UNIFORM_BUFFER, 2, lightingUBO);
 			}
-			if (ixMaterialBlock != -1)
-			{
-				glBindBufferBase(GL_UNIFORM_BUFFER, 3, materialUBO);
-			}
 
 			//
 			// Setup the material for each group and draw.
@@ -896,6 +1004,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 			size_t groupCount = arrlen(mesh->groups);
 			if (groupCount == 0)
 			{
+				glBindBufferBase(GL_UNIFORM_BUFFER, 3, defaultMaterialUBO);
 				glDrawArrays(GL_TRIANGLES, mesh->vertexOffset, mesh->vertexCount);
 			}
 			else for (uint32_t ixG = 0; ixG < groupCount; ixG++)
@@ -904,45 +1013,20 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 
 				if (ixMaterialBlock != -1)
 				{
-					//TODO: make it so that each material has its own UBO that just needs to be bound and unbound.
-
-					vec3 DEFAULT_AMBIENT = { 0.1f, 0.1f, 0.1f };
-					vec3 DEFAULT_DIFFUSE = { 0.8f, 0.8f, 0.8f };
-					vec3 DEFAULT_SPECULAR= { 0.8f, 0.8f, 0.8f };
-					float DEFAULT_SHININESS = 1.45f;
-					float DEFAULT_ALPHA = 1.0f;
-
-					uint8_t* block = (uint8_t*)glMapNamedBuffer(materialUBO, GL_WRITE_ONLY);
+					if (g.ixMaterial != -1)
 					{
-						size_t offset = 0;
-						
-						//u_ambientColor
-						memcpy(block + offset, g.hasMaterial ? g.mtl.ambient : DEFAULT_AMBIENT, sizeof(vec3));
-						offset += sizeof(vec4);
-						//u_diffuseColor
-						memcpy(block + offset, g.hasMaterial ? g.mtl.diffuse 	: DEFAULT_DIFFUSE, sizeof(vec3));
-						offset += sizeof(vec4);
-						//u_specularColor
-						memcpy(block + offset, g.hasMaterial ? g.mtl.specular	: DEFAULT_SPECULAR, sizeof(vec3));
-						offset += sizeof(vec3);
-						
-						//u_alpha
-						memcpy(block + offset, g.hasMaterial ? &g.mtl.alpha : &DEFAULT_ALPHA, sizeof(float));
-						offset += sizeof(vec4);
-
-						//u_shininess
-						memcpy(block + offset, g.hasMaterial ? & g.mtl.shininess : &DEFAULT_SHININESS, sizeof(float));
-						offset += sizeof(vec4);
+						glBindBufferRange(GL_UNIFORM_BUFFER, 3, mtls, g.ixMaterial * UBO_ALIGNMENT, 0x50);
 					}
-					GLboolean notCorrupted = glUnmapNamedBuffer(materialUBO);
-					assert(notCorrupted); //TODO
+					else
+						glBindBufferBase(GL_UNIFORM_BUFFER, 3, defaultMaterialUBO);
 				}
 				
+				//
+				// When there are multiple meshes stored in the same vbo and ebo,
+				// the meshes are stored sequencialy in both buffers.
+				//
+
 				if (mesh->vertexOffset != 0)
-					//
-					// When there are multiple meshes stored in the same vbo and ebo,
-					// the meshes are stored sequencialy in both buffers.
-					//
 					glDrawElementsBaseVertex(GL_TRIANGLES, g.count, GL_UNSIGNED_INT, (void*)(sizeof(uint32_t) * (g.ixFirst + mesh->indexOffset)), mesh->vertexOffset);
 				else
 					glDrawElements(GL_TRIANGLES, g.count, GL_UNSIGNED_INT, (void*)(sizeof(uint32_t) * (g.ixFirst + mesh->indexOffset)));
@@ -961,7 +1045,8 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	for (uint32_t i = 0; i < meshCount; i++) destroy_mesh(meshes + i);
 	arrfree(meshes);
 
-	GLuint buffersToDelete[] = { vbo, ebo, matrixUBO, cameraUBO, lightingUBO, materialUBO };
+	GLuint buffersToDelete[] = { vbo, ebo, mtls, 
+		matrixUBO, cameraUBO, lightingUBO, defaultMaterialUBO };
 	glDeleteBuffers(_countof(buffersToDelete), buffersToDelete);
 	glDeleteVertexArrays(1, &vao);
 	glDeleteProgram(program);
