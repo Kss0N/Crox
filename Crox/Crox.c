@@ -575,7 +575,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 			  GL_DYNAMIC_DRAW),
 		lightingUBO = createUBO(2 * sizeof(vec4), 
 			GL_DYNAMIC_DRAW),
-		materialUBO = createUBO(3 * sizeof(vec4) + 2 * sizeof(float), 
+		materialUBO = createUBO(3 * sizeof(vec4) + 2 * sizeof(float),
 			GL_DYNAMIC_DRAW);
 	
 	if (  matrixUBO) NAME_OBJECT(GL_BUFFER,   matrixUBO,          "<Matrix Uniform Buffer>");
@@ -915,6 +915,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 					uint8_t* block = (uint8_t*)glMapNamedBuffer(materialUBO, GL_WRITE_ONLY);
 					{
 						size_t offset = 0;
+						
 						//u_ambientColor
 						memcpy(block + offset, g.hasMaterial ? g.mtl.ambient : DEFAULT_AMBIENT, sizeof(vec3));
 						offset += sizeof(vec4);
@@ -923,12 +924,14 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 						offset += sizeof(vec4);
 						//u_specularColor
 						memcpy(block + offset, g.hasMaterial ? g.mtl.specular	: DEFAULT_SPECULAR, sizeof(vec3));
+						offset += sizeof(vec3);
+						
+						//u_alpha
+						memcpy(block + offset, g.hasMaterial ? &g.mtl.alpha : &DEFAULT_ALPHA, sizeof(float));
 						offset += sizeof(vec4);
+
 						//u_shininess
 						memcpy(block + offset, g.hasMaterial ? & g.mtl.shininess : &DEFAULT_SHININESS, sizeof(float));
-						offset += sizeof(vec4);
-						//u_alpha
-						memcpy(block + offset, g.hasMaterial ? &g.mtl.alpha	 : &DEFAULT_ALPHA, sizeof(float));
 						offset += sizeof(vec4);
 					}
 					GLboolean notCorrupted = glUnmapNamedBuffer(materialUBO);

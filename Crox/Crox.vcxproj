@@ -244,6 +244,7 @@
     <None Include="3D.vert" />
     <None Include="default.frag" />
     <None Include="default.vert" />
+    <None Include="quick3D.frag" />
   </ItemGroup>
   <ItemGroup>
     <Object Include="..\rsc\mesh\biplane\biplane.obj">

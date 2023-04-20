@@ -183,6 +183,9 @@
     <None Include="..\rsc\mesh\biplane\G17SL.MAX">
       <Filter>Resource Files\meshes\wavefront\biplane</Filter>
     </None>
+    <None Include="quick3D.frag">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Object Include="..\rsc\mesh\teapot.obj">
