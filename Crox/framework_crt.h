@@ -13,7 +13,6 @@
 #ifdef _DEBUG
 #define _CRTDBG_MAP_ALLOC
 #endif // _DEBUG
-#include <crtdbg.h>
 
 
 #include <stdlib.h>
@@ -31,3 +30,4 @@
 #include <assert.h>
 #include <malloc.h>
 
+#include <crtdbg.h>

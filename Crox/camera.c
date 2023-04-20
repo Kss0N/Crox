@@ -21,6 +21,10 @@ inline void updateView(_In_ struct Camera* c)
 	vec3 center;
 	mat4x4_look_at(c->_view, c->wPos, vec3_add(center, c->wPos, c->wDir), UP);
 }
+inline void getRight(_In_ struct Camera* c, _Out_ vec3 r)
+{
+	vec3_norm(r, vec3_mul_cross(r, UP, c->wDir));
+}
 
 
 //

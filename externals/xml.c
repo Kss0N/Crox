@@ -38,7 +38,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
+#undef min
+#undef max
 
 
  /*
@@ -481,7 +482,7 @@ static struct xml_attribute** xml_find_attributes(struct xml_parser* parser, str
 				continue;
 			}
 		}
-		position = token - tmp;
+		position = (int)(token - tmp);
 		start_name = &tag_open->buffer[position];
 		start_content = &tag_open->buffer[position + strlen(str_name) + 2];
 

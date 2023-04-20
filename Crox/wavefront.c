@@ -39,233 +39,6 @@ struct IndexKV
 #define NORM_ELEM_SIZE 3
 #define TEXT_ELEM_SIZE 2
 
-/**
-	@brief 
-	@param file - containing content to be read.
-	@returns    - stb ds Vertex AOS and indices. Indices are ONLY triangles 
-**/
-struct WavefrontMesh wavefront_read(_In_ FILE* file)
-{
-	vec3* geometries	= NULL; // 3 values per geometry
-	vec2* textures		= NULL; // 3 values per texture
-	vec3* normals		= NULL; // 2 values per normal
-
-
-	struct Vertex* vertices = NULL;
-	uint32_t* indices = NULL;
-
-	struct IndexKV* indexTable = NULL;
-
-	const size_t LINE_BUF_SIZE = 512;
-	char* lineBuf = malloc(sizeof * lineBuf * LINE_BUF_SIZE);
-	if (!lineBuf)
-	{
-		return; //Note to user: check errno
-	}
-
-	
-	
-	bool isError = false;
-	bool isEOF = false;
-	while (!isEOF && !isError)
-	{
-		/*Handle Lines*/
-
-		// Zero terminated string inside the buffer
-		const char* line = fgets(lineBuf, LINE_BUF_SIZE, file);
-		if (line == NULL)
-		{
-			isError	= ferror(file);
-			isEOF	= feof(file);
-			if (isEOF)
-			{
-				break;
-			}
-			if (isError)
-			{
-
-				break;
-			}
-			continue;
-		}
-		char* it = line;
-
-		/* Process lines */
-		switch (*it++)
-		{
-
-		// Faces
-		case 'f':	// TODO: polygon triangulation
-		{
-
-			for (uint32_t i = 0; i < 3; i++)
-			{
-				it = strchr(it, ' ')+1;
-
-				int ixG = 0;
-				int ixT = 0;
-				int ixN = 0;
-
-				int result;
-				if		(result = sscanf_s(it, "%d/%d/%d", &ixG, &ixT, &ixN))
-					assert(result != EOF);
-				else if (result = sscanf_s(it, "%d/%d", &ixG, &ixT))
-					assert(result != EOF);
-				else if (result = sscanf_s(it, "%d", &ixG))
-					assert(result != EOF);
-				else if (result = sscanf_s(it, "%d//%d", &ixG, &ixN))
-					assert(result != EOF);
-				else
-				{
-					isError = true;
-				}
-
-				assert(ixG != 0);
-
-				ixG = ixG < 0 ? arrlenu(geometries) + ixG : ixG;
-				ixT = ixT < 0 ? arrlenu(textures) + ixT : ixT;
-				ixN = ixN < 0 ? arrlenu(normals) + ixN : ixN;
-
-				struct IndexChunk chunk = { ixG, ixT, ixN };
-
-				uint32_t index;
-
-				if (hmgeti(indexTable, chunk) != -1) // chunk already exists
-					index = hmget(indexTable, chunk);
-				else
-				{
-					//Append new vertex to the list of vertices,
-					//put new vertex' index  into the table
-					
-					struct Vertex v;
-					memset(&v, 0, sizeof v);
-
-					if (ixG)
-						memcpy_s(
-							v.pos, sizeof(vec3),
-							&geometries[ixG - 1], GEOM_ELEM_SIZE * sizeof(float));
-					else memset(v.pos, 0, sizeof(vec3)); // It's illegal for a face to not have a geometrical position
-
-					if (ixT)
-						memcpy_s(
-							v.texcoord0, sizeof(vec2),
-							&textures[ixT - 1], TEXT_ELEM_SIZE * sizeof(float));
-					else memset(v.texcoord0, 0, sizeof(vec2));
-
-					if (ixN)
-						memcpy_s(
-							v.normal, sizeof(vec3),
-							&normals[ixN - 1], NORM_ELEM_SIZE * sizeof(float));
-					else memset(v.normal, 0, sizeof(vec3));
-
-					arrput(vertices, v);
-					index = arrlenu(vertices) - 1;
-
-					hmput(indexTable, chunk, index);
-				}
-
-				arrput(indices, index);
-			}
-
-
-			break;
-		}
-
-
-		//Vertex Data
-		case 'v':
-		{
-			uint32_t elemCount ;/*PENDING*/
-			float** pList;		/*PENDING*/
-
-			switch (*it++)
-			{
-			case ' ': //Geometry
-			{
-				pList = &geometries;
-				elemCount = GEOM_ELEM_SIZE;
-				it--; //backtrack to make it work like the other ones.
-				break;
-			}
-			case 't': //Texture
-			{
-				pList = &textures;
-				elemCount = TEXT_ELEM_SIZE;
-				break;
-			}
-			//Normal
-			case 'n': {
-				pList = &normals;
-				elemCount = NORM_ELEM_SIZE;
-				break;
-			}
-			// Free Form Geometry Vertex space
-			case 'p':{
-				//TODO:
-				continue;
-			}
-
-			default:
-				isError = true;
-				errno = EILSEQ;
-				continue;
-			}
-			assert(elemCount != 0 && pList != NULL);
-			
-			float value = 0;
-			for (uint32_t i = 0; i < elemCount; i++)
-			{
-				it = strchr(it, ' ')+1; //skip to value
-				uint32_t result;
-				if (result = sscanf_s(it, "%f", &value))
-				{
-					
-				}
-				else if (result == EOF )
-				{
-					isError = true;
-					break;
-				}
-
-				arrput(*pList, value);
-				
-			}
-
-			break;
-		}
-		
-		
-
-		case '#': // Ignore comments.
-		{
-			continue;
-		}
-		default: // TODO (ignored for now)
-			//isError = true;
-			//errno = EILSEQ;
-			continue;
-		}
-
-		
-
-	}
-
-	free(lineBuf);
-	hmfree(indexTable);
-	arrfree(geometries);
-	arrfree(textures);
-	arrfree(normals);
-	hmfree(indexTable);
-
-	struct WavefrontMesh mesh = {
-		.vertices = vertices,
-		.indices = indices,
-		.mtlName = NULL, //TODO;
-		.name = NULL, //TODO
-	};
-
-	return mesh;
-}
 
 /**
 	@brief  Checks if str starts with pfx.
@@ -316,7 +89,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 	struct WavefrontGroup activeGroup;
 	memset(&activeGroup, 0, sizeof activeGroup);
 
-	const size_t LINEBUF_SIZE = 512;
+	const int LINEBUF_SIZE = 512;
 	char* lineBuf = malloc(sizeof * lineBuf * LINEBUF_SIZE);
 
 	errno_t error = 0;
@@ -324,7 +97,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 	bool isEOF = false;
 	while (!isEOF && !isError && error == 0)
 	{
-		const char* line = fgets(lineBuf, LINEBUF_SIZE, file);
+		char* line = fgets(lineBuf, LINEBUF_SIZE, file);
 		
 		if (line == NULL)
 		{
@@ -342,7 +115,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 
 
 
-		char* it = line;	//iterator through the line
+		const char* it = line;	//iterator through the line
 		switch (*it++)
 		{
 		
@@ -374,9 +147,9 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 
 
 				struct IndexChunk chunk = { 
-					ixG < 0 ? arrlenu(geometries) + ixG : ixG-1, 
-					ixT < 0 ? arrlenu(textures)	  + ixT : ixT-1,
-					ixN < 0 ? arrlenu(normals)	  + ixN : ixN-1,
+					ixG < 0 ? (uint32_t)arrlenu(geometries) + ixG : ixG - 1, 
+					ixT < 0 ? (uint32_t)arrlenu(textures)	+ ixT : ixT - 1,
+					ixN < 0 ? (uint32_t)arrlenu(normals)	+ ixN : ixN - 1,
 				};
 				uint32_t index;
 
@@ -412,7 +185,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 
 					arrput(vertices, vertex);
 
-					index = arrlenu(vertices) - 1;
+					index = (uint32_t)arrlenu(vertices) - 1;
 					hmput(indexTable, chunk, index);
 				}
 				else 
@@ -432,24 +205,25 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 		{
 			uint32_t elemCount = PENDING;
 			float** pList = PENDING_PTR;
+
 			switch (*it++){
 			// Geometry Data
 			case ' ': {
 				elemCount = GEOM_ELEM_SIZE;
-				pList = &geometries;
+				pList = (float**) & geometries;
 				it--;
 				break;
 			}
 			// Texture Data
 			case 't': {
 				elemCount = TEXT_ELEM_SIZE;
-				pList = &textures;
+				pList = (float**) & textures;
 				break;
 			}
 			// Normal Data
 			case 'n': {
 				elemCount = NORM_ELEM_SIZE;
-				pList = &normals;
+				pList = (float**) & normals;
 				break;
 			}
 			//Vertex Space data (NOT SUPPORTED [FIXME])
@@ -489,7 +263,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 			// 2) begin new
 			it = strchr(line, ' ') + 1;
 
-			activeGroup.count = arrlen(indices)- activeGroup.ixFirst;
+			activeGroup.count = (uint32_t)arrlen(indices)- activeGroup.ixFirst;
 			if (activeGroup.count <= 0 && activeGroup.name == NULL && activeGroup.mtlName == NULL)
 			{
 				// There was no prev group, do nothing
@@ -498,7 +272,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 				arrput(groups, activeGroup);
 			
 			memset(&activeGroup, 0, sizeof activeGroup);
-			activeGroup.ixFirst = arrlenu(indices);
+			activeGroup.ixFirst = (uint32_t)arrlenu(indices);
 
 			//If there's a name, remainder after trainling space is the name of the new group.
 			const char* name = it != NULL ? it : "noname";
@@ -585,7 +359,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 	if (isError)
 		assert(isError);
 
-	activeGroup.count = arrlenu(indices) - activeGroup.ixFirst;
+	activeGroup.count = (uint32_t)arrlenu(indices) - activeGroup.ixFirst;
 	
 	if (activeGroup.count != 0 && arrlenu(indices) > 0)
 	{
@@ -615,7 +389,7 @@ struct WavefrontMtllib wavefront_mtl_read(_In_ FILE* file)
 	const char** keys = NULL;
 	// Utilities:
 
-	const size_t LINEBUF_SIZE = 512;
+	const int LINEBUF_SIZE = 512;
 	char* lineBuf = _aligned_malloc(sizeof * lineBuf * LINEBUF_SIZE, 8);
 
 	_Null_terminated_ char* name = NULL;// name of the material
@@ -627,7 +401,7 @@ struct WavefrontMtllib wavefront_mtl_read(_In_ FILE* file)
 	bool isError = false;
 	while (!isEOF && !isError)
 	{
-		const char* line = fgets(lineBuf, LINEBUF_SIZE, file);
+		char* line = fgets(lineBuf, LINEBUF_SIZE, file);
 
 		if (line == NULL)
 		{
@@ -643,7 +417,7 @@ struct WavefrontMtllib wavefront_mtl_read(_In_ FILE* file)
 		else
 			removeLineFeed(line);
 
-		char* it = line; // iterator through the line.
+		const char* it = line; // iterator through the line.
 		switch (*it++)
 		{
 		case 'N': // Scalars

@@ -117,7 +117,7 @@ extern APIENTRY _tWinMain(
 #endif // _DEBUG
 
 
-	const size_t NAMEBUF_SIZE = 128;
+	const UINT NAMEBUF_SIZE = 128;
 	LPTSTR namebuf = malloc(NAMEBUF_SIZE * sizeof * namebuf);
 	LoadString(hInstance, IDS_MAINWNDCLS, namebuf, NAMEBUF_SIZE);
 	HICON mainIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_CROX));
@@ -199,7 +199,7 @@ extern APIENTRY _tWinMain(
 
 	BOOL ctxInitialized =
 		(mainCls = RegisterClassEx(&wcex)) &&
-		LoadString(hInstance, MAKEINTRESOURCE(IDS_TITLE), namebuf, NAMEBUF_SIZE) &&
+		LoadString(hInstance, IDS_TITLE, namebuf, NAMEBUF_SIZE) &&
 		(hMainWnd = CreateWindowEx(EX_WIN_STYLES, (LPCTSTR)mainCls, namebuf, WIN_STYLES,
 			// X * Y
 			CW_USEDEFAULT, 0, //TODO
@@ -210,7 +210,7 @@ extern APIENTRY _tWinMain(
 		wglChoosePixelFormatARB(hDC, pfdIntAttribs, pfdFloatAttribs, 1, &format, &formatsReceivedCount) &&
 		DescribePixelFormat(hDC, format, sizeof pfd, &pfd) &&
 		SetPixelFormat(hDC, format, &pfd) &&
-		(hCtx = wglCreateContextAttribsARB(hDC, NULL, &ctxAttribs)) &&
+		(hCtx = wglCreateContextAttribsARB(hDC, NULL, ctxAttribs)) &&
 		wglMakeContextCurrentARB(hDC, hDC, hCtx);
 	free(namebuf);
 
@@ -224,7 +224,7 @@ extern APIENTRY _tWinMain(
 	
 	if (nk_init_default(ctx, &font))
 	{
-		LPTSTR pEnv = GetEnvironmentStrings();
+		LPTSTR pEnv = GetEnvironmentStrings(); //TODO
 		int argC	= 0;
 		LPTSTR* argV= CommandLineToArgvW(lpCmdline, &argC);
 		
@@ -243,7 +243,7 @@ extern APIENTRY _tWinMain(
 		};
 		nk_set_user_data(ctx, (nk_handle) { .ptr = &rsc });
 
-		result = _tmain(ctx, argC, argV, pEnv);
+		result = _tmain(ctx, argC, argV, (_TCHAR**)pEnv);
 
 		if (pEnv)
 			FreeEnvironmentStrings(pEnv);
@@ -254,7 +254,8 @@ extern APIENTRY _tWinMain(
 
 	free(ctx);
 	gladLoaderUnloadGL();
-
+	
+	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
 	return result;
 }
 
@@ -272,6 +273,7 @@ int __CRTDECL crtAllocHook(
 		return(TRUE); //operation may proceed.
 
 	//TODO
+	return TRUE;
 }
 
 void __CRTDECL crtDumpClientHook(
@@ -309,7 +311,7 @@ void __cdecl invalidParamHandler(
 	DWORD_PTR args[] = {(DWORD_PTR)file, (DWORD_PTR)line, (DWORD_PTR)funcName, (DWORD_PTR)expression};
 	FormatMessage(fmFlags, 
 		L"Invalid Parameter [%s, %d]: routine: %s, expression: %s\n", 
-		0, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&msg, 0, (va_list)args);
+		0, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&msg, 0, (va_list*)&args);
 	if (msg != NULL)
 	{
 		OutputDebugString(msg);
@@ -409,7 +411,7 @@ LRESULT setupWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPA
 		LPCREATESTRUCT pCs = (LPCREATESTRUCT)lParam;
 		struct nk_context* ctx = (struct nk_context*)pCs->lpCreateParams;
 
-		SetWindowLongPtr(hWnd, GWLP_USERDATA, ctx);
+		SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)ctx);
 		SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)&mainWndProc);
 		return mainWndProc(hWnd, msg, wParam, lParam);
 	}
@@ -418,7 +420,7 @@ LRESULT setupWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPA
 
 LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPARAM lParam)
 {
-	struct nk_context* ctx = GetWindowLongPtr(hWnd, GWLP_USERDATA);
+	struct nk_context* ctx = (struct nk_context*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 	switch (msg)
 	{
 	
@@ -547,7 +549,7 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 		break;
 	}
 	case WM_CHAR: {
-		TCHAR key = (TCHAR)wParam;
+		char key = (CHAR)wParam;
 
 		
 		WORD flags = HIWORD(lParam);
@@ -578,7 +580,7 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 		UINT width = LOWORD(lParam);
 		UINT height = HIWORD(lParam);
 
-		nk_window_set_size(ctx, "Crox", (struct nk_vec2) { .x = width, .y = height });
+		nk_window_set_size(ctx, "Crox", (struct nk_vec2) { .x = (float)width, .y = (float)height });
 
 		break;
 	}
@@ -677,7 +679,7 @@ bool platform_pollMessages(_In_ NkContext* ctx, _Out_ int* status)
 	{
 		if (msg.message == WM_QUIT)
 		{
-			*status = msg.wParam;
+			*status = (int) msg.wParam;
 			return false;
 		}
 		
