@@ -662,7 +662,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 
 	const vec3 BEGIN_POS = { 0,0,-10 };		
 	const float speed = .1f;				
-	const float sensitivity = 0.001f;		
+	const float sensitivity = 1.f;		
 	const float FOV = toRadians(45.0f);
 	const float zNear = .1f;
 	const float zFar = 100.0f;
@@ -845,7 +845,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 				// Note: input parameters say dX when dY is used to create the pitch constant; dX refers to the X pseudo-vector corresponding to the pitch axis, while the dY in this example refers to the moues movement
 				//		
 
-				camera_pitch_limited(&cam, -pitch, toRadians(85.0f)); //go CCW
+				camera_pitch_limited(&cam, -pitch, toRadians(85.f)); //go CCW
 				camera_yaw(&cam, -yaw);
 			}
 		}
@@ -931,16 +931,6 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 			// Update Uniform buffers
 			//
 
-			vec3 center;
-			const vec3 UP = { 0,1,0 };
-
-			mat4 projection;
-			mat4x4_perspective(projection, FOV, (float)width / height, zNear, zFar);
-			mat4 view;
-			mat4x4_look_at(view, cam.wPos, vec3_add(center, cam.wPos, cam.wDir), UP);
-
-
-
 			mat4 model; //model matrix
 			mat4x4_dup(model, mesh->matrix);
 
@@ -948,8 +938,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 			mat4x4_transpose(normalMatrix, mat4x4_invert(normalMatrix, model));
 
 			mat4 matrix; //projection * view * model 
-			mat4x4_mul(matrix, cam.matrix, model); //matrix = cam's matrix * E			
-			//mat4x4_mul(matrix, projection, mat4x4_mul(matrix, view, model));
+			mat4x4_mul(matrix, cam.matrix, model); //matrix = matrix_cam * matrix_model			
 
 			const GLint
 				  ixMatrixBlock = glGetUniformBlockIndex(activeProgram,   "MatrixBlock"),

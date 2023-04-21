@@ -11,8 +11,9 @@
 #include "camera.h"
 
 
-const vec3 UP = { 0, 1.0f, 0.0 };
+const vec3 UP =	{ 0.f, 1.f, 0.f };
 const vec3 DEFAULT_DIR = { 0,0,1 };
+const vec3 DEFAULT_POS = { 0,0,0 };
 
 #define UPDATE_CAMERA_MATRIX(cam) mat4x4_mul(cam->matrix, cam->_projection, cam->_view);
 
@@ -21,7 +22,7 @@ inline void updateView(_In_ struct Camera* c)
 	vec3 center;
 	mat4x4_look_at(c->_view, c->wPos, vec3_add(center, c->wPos, c->wDir), UP);
 }
-inline void getRight(_In_ struct Camera* c, _Out_ vec3 r)
+inline void getRight(_In_ struct Camera* c, _Out_writes_(3) vec3 r)
 {
 	vec3_norm(r, vec3_mul_cross(r, UP, c->wDir));
 }
@@ -32,7 +33,7 @@ inline void getRight(_In_ struct Camera* c, _Out_ vec3 r)
 //
 
 
-void camera_worldPosition_set(_Inout_ struct Camera* c, _In_opt_ const vec3 nPos)
+void camera_worldPosition_set(_Inout_ struct Camera* c, _In_reads_opt_(3) const vec3 nPos)
 {
 	if (nPos)
 	{
@@ -45,7 +46,7 @@ void camera_worldPosition_set(_Inout_ struct Camera* c, _In_opt_ const vec3 nPos
 	UPDATE_CAMERA_MATRIX(c);
 }
 
-void camera_direction_set(_Inout_ struct Camera* c, _In_opt_ const vec3 nDir)
+void camera_direction_set(_Inout_ struct Camera* c, _In_reads_opt_(3) const vec3 nDir)
 {
 	vec3 norm;
 
@@ -55,7 +56,7 @@ void camera_direction_set(_Inout_ struct Camera* c, _In_opt_ const vec3 nDir)
 	UPDATE_CAMERA_MATRIX(c);
 }
 
-void camera_move_world(_Inout_ struct Camera* c, _In_ const vec3 delta)
+void camera_move_world(_Inout_ struct Camera* c, _In_reads_(3) const vec3 delta)
 {
 	vec3_add(c->wPos, c->wPos, delta);
 
@@ -63,7 +64,7 @@ void camera_move_world(_Inout_ struct Camera* c, _In_ const vec3 delta)
 	UPDATE_CAMERA_MATRIX(c);
 }
 
-void camera_move_local(_Inout_ struct Camera* c, _In_ const vec3 delta)
+void camera_move_local(_Inout_ struct Camera* c, _In_reads_(3) const vec3 delta)
 {
 	vec3 temp;
 	vec3 right;
@@ -85,18 +86,25 @@ void camera_pitch(_Inout_ struct Camera* c, _In_ float dX)
 void camera_pitch_limited(_Inout_ struct Camera* c, _In_ float dX, _In_ float maxAngle)
 {
 	//vertically:
-	//newDir = rotate(dir, -yaw, |dir x up|) = rotate(-yaw * |dir x up|) * dir
+	//
+	//	newDir = rotate(dir, -yaw, |dir x up|) = rotate(-yaw * |dir x up|) * dir
+	//	if |angle(newDir, UP)| - PI/2 <= maxAngle then camera.dir := newDir
 	
 	vec3 right;
 	vec3_norm(right, vec3_mul_cross(right, c->wDir, UP));
 
-	mat4 tmpM;	
-	mat4x4_rotate(tmpM, mat4x4_identity(tmpM), right[0], right[1], right[2], dX);
+	mat4 rot;	
+	mat4x4_rotate(rot, mat4x4_identity(rot), right[0], right[1], right[2], dX);
+
+	vec4 vec = {0,0,0,0}; //directions are not able to have translations applied; vec[3] = 0
+	vec3_dup(vec, c->wDir);
 
 	vec4 newDir;
-	mat4x4_mul_vec4(newDir, tmpM, c->wDir);
+	mat4x4_mul_vec4(newDir, rot, vec);
 
-	if (fabs(vec3_angle(newDir, UP)) - toRadians(90) <= maxAngle)
+	float len = vec3_len(newDir);
+
+	if (fabs(vec3_angle(newDir, UP)) - toRadians(90.f) <= maxAngle)
 		vec3_dup(c->wDir, newDir);
 
 	updateView(c);
@@ -108,13 +116,16 @@ void camera_yaw(_Inout_ struct Camera* c, _In_ float dY)
 	// horizontally:
 	// dir = rotate(dir, -yaw, Up)
 	
-	mat4 tmpM;
-	mat4x4_rotate(tmpM, mat4x4_identity(tmpM), UP[0], UP[1], UP[2], dY);
+	mat4 rot;
+	mat4x4_rotate(rot, mat4x4_identity(rot), UP[0], UP[1], UP[2], dY);
 	
+	vec4 vec = { 0,0,0,0 }; //directions are not able to have translations applied; vec[3] = 0
+	vec3_dup(vec, c->wDir);
+
 	vec4 newDir;
 	mat4x4_mul_vec4(newDir, 
-		tmpM, 
-		c->wDir);
+		rot, 
+		vec);
 	
 	vec3_dup(c->wDir, newDir);
 	
@@ -122,7 +133,7 @@ void camera_yaw(_Inout_ struct Camera* c, _In_ float dY)
 	UPDATE_CAMERA_MATRIX(c);
 }
 
-void camera_view_set(_Inout_ struct Camera* c, _In_opt_ const vec3 pos, _In_opt_ const vec3 dir)
+void camera_view_set(_Inout_ struct Camera* c, _In_reads_opt_(3) const vec3 pos, _In_reads_opt_(3) const vec3 dir)
 {
 	if (pos)
 		vec3_dup(c->wPos, pos);
@@ -136,7 +147,7 @@ void camera_view_set(_Inout_ struct Camera* c, _In_opt_ const vec3 pos, _In_opt_
 
 
 
-void camera_projection_set(_Inout_ struct Camera* c, _In_ const mat4 projection)
+void camera_projection_set(_Inout_ struct Camera* c, _In_reads_(4) const mat4 projection)
 {
 	mat4x4_dup(c->_projection, projection);
 	UPDATE_CAMERA_MATRIX(c);
