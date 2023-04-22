@@ -1,14 +1,30 @@
+/**
+
+	@file      win32.c
+	@brief		This module serves as an interface between the Crox Application Layer and the Windows operating system. It also bootstraps the application before calling `main()`. 
+				This module also contains the logging logic called from <log.h>
+	@details   It is a state containing module. (normally I try to avoid global variables, but here one is.)
+	@author    Jakob Kristersson <jakob.kristerrson@bredband.net> [Kss0N]
+	@date      21.04.2023
+
+**/
+
+
+
 #include "framework_winapi.h"
 #include "framework_nuklear.h"
 #include "framework_crt.h"
-
-#include <glad/gl.h>
-#include <glad/wgl.h>
 #include "resource.h"
 #include "Crox.h"
 #include "Platform.h"
+#include "log.h"	//win32 will implement this module 
+
+#include <glad/gl.h>
+#include <glad/wgl.h>
 
 
+
+// If there are multiple GPUs on the system, tell openGL to prefer the driver of the discrete GPU over the integrated one.
 #ifdef __cplusplus
 extern "C"
 #endif // __cplusplus
@@ -542,9 +558,12 @@ LRESULT mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM wParam, _In_ LPAR
 		break;
 	}
 	case WM_KEYDOWN: {
+		CHAR key = (CHAR)wParam;
 
 		if(wParam == VK_F11)
 			toggleFullscreen(ctx);
+
+		nk_input_char(ctx, (char)key);
 
 		break;
 	}
@@ -692,3 +711,55 @@ bool platform_pollMessages(_In_ NkContext* ctx, _Out_ int* status)
 	return true;
 }
 
+
+FILE* outLogStream = NULL;
+
+#ifdef _DEBUG
+
+FILE* log_setLog(_In_opt_ FILE* newFile)
+{
+	FILE* old = outLogStream;
+	outLogStream = newFile;
+	return old;
+}
+
+int log_logEntry(_In_ enum Severity severity, _Printf_format_string_ TCHAR* fmt, ...)
+{
+	LPCTSTR strSeverity;
+	switch (severity)	
+	{
+	case CXLOG_SEVERITY_INFO: strSeverity = _T("info");  break;
+	case CXLOG_SEVERITY_DEBUG:strSeverity = _T("debug"); break;
+	case CXLOG_SEVERITY_TRACE:strSeverity = _T("Trace"); break;
+	case CXLOG_SEVERITY_WARN: strSeverity = _T("Warn");  break;
+	case CXLOG_SEVERITY_ERROR:strSeverity = _T("Error"); break;
+	case CXLOG_SEVERITY_FATAL:strSeverity = _T("Fatal"); break;
+	default:
+		strSeverity = _T("Unknown"); 
+		break;
+	}
+
+	_Printf_format_string_ TCHAR combinedFormat[512];
+	_stprintf_s(combinedFormat, 512, _T("<%s> %s"), strSeverity, fmt);
+
+	TCHAR buffer[4096];
+	va_list args;
+	va_start(args, fmt);
+
+	int res;
+	if (outLogStream)
+	{
+		res = _vftprintf_s(outLogStream, combinedFormat, args);
+	}
+	else 
+	{
+		res = _vstprintf_s(buffer, _countof(buffer), combinedFormat, args);
+		OutputDebugString(buffer);
+	}
+	va_end(args);
+	return res;
+}
+
+#else
+
+#endif // _DEBUG

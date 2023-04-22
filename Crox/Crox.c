@@ -14,6 +14,7 @@
 #include "mesh.h"
 #include "wavefront.h"
 #include "camera.h"
+#include "log.h"
 
 #include <glad/gl.h>
 #include <glad/wgl.h>
@@ -114,12 +115,69 @@ static GLuint makeProgramGLSL(
 	@brief  As it's possible to bind parts of a UBO to a bind position, the parts must be aligned. the alignment is determined by the driver.
 	@retval  - base Alignment for UBO ranges 
 **/
-inline const int32_t getUBOAlignment()
+
+inline const uint32_t getSSBOAlignment()
+{
+	int32_t alignment;
+	glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &alignment);
+	return (uint32_t)alignment;
+}
+inline const uint32_t getTBOAlignment()
+{
+	int32_t alignment;
+	glGetIntegerv(GL_TEXTURE_BUFFER_OFFSET_ALIGNMENT, &alignment);
+	return (uint32_t)alignment;
+}
+inline const uint32_t getUBOAlignment()
 {
 	int32_t alignment;
 	glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &alignment);
-	return alignment;
+	return (uint32_t)alignment;
 }
+
+inline const uint32_t getMaxSSBOBindingCount() {
+	int32_t c;
+	glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &c);
+	return (uint32_t)c;
+}
+inline const uint32_t getMaxTexUnitCount()
+{
+	int32_t c;
+	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &c);
+	return (uint32_t)c;
+}
+inline const uint32_t getMaxUBOBindingCount() 
+{
+	int32_t c;
+	glGetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS , &c);
+	return (uint32_t)c;
+}
+
+inline const uint32_t getMaxSSBOBlockSize()
+{
+	int32_t s;
+	glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &s);
+	return (uint32_t)s;
+}
+inline const uint32_t getMaxTBOSize()
+{
+	int32_t s;
+	glGetIntegerv(GL_MAX_TEXTURE_BUFFER_SIZE, &s);
+	return (uint32_t)s;
+}
+inline const uint32_t getMaxTexSize()
+{
+	int32_t s;
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &s);
+	return (uint32_t)s;
+}
+inline const uint32_t getMaxUBOBlockSize() 
+{
+	int32_t s;
+	glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE , &s);
+	return (uint32_t)s;
+}
+
 
 static const unsigned char* readBinary(_In_z_ Path p, _Out_ size_t* len)
 {
@@ -127,7 +185,7 @@ static const unsigned char* readBinary(_In_z_ Path p, _Out_ size_t* len)
 	fopen_s(&f, p, "rb");
 	if (!f)
 	{
-		OutputDebugFormatted(_T("Could not open path <%hs>\n"), p);
+		cxERROR(_T("Could not open path <%hs>\n"), p);
 		*len = 0;
 		return NULL;
 	}
@@ -147,13 +205,13 @@ static const unsigned char* readBinary(_In_z_ Path p, _Out_ size_t* len)
 	return data;
 }
 
-inline void cleanupSource(const char* src)
+inline void cleanupSource(_In_opt_ const char* src)
 {
 	if (src != NULL)
 		free((void*)src);
 }
 
-inline void detachDeleteShader(GLuint fromProgram, GLuint shader)
+inline void detachDeleteShader(_In_ GLuint fromProgram, _In_ GLuint shader)
 {
 	if (shader) 
 	{
@@ -163,10 +221,11 @@ inline void detachDeleteShader(GLuint fromProgram, GLuint shader)
 }
 
 #ifdef _DEBUG
-inline bool checkCompileStatus(GLuint shader) 
+inline bool checkCompileStatus(_In_ GLuint shader) 
 {
 	GLint isCompiled = GL_FALSE;
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
+#ifndef glDebugMessageCallback
 	if (!isCompiled)
 	{
 		GLint msgLen;
@@ -175,11 +234,12 @@ inline bool checkCompileStatus(GLuint shader)
 		GLchar* msg = alloca(msgLen+1);
 		glGetShaderInfoLog(shader, msgLen, NULL, msg);
 
-		OutputDebugFormatted(_T("Error compiling shader: %hs"), msg);
+		cxERROR(_T("Error compiling shader: %hs"), msg);
 	}
+#endif // !glDebugMessageCallback
 	return isCompiled;
 }
-inline bool isSPIRV(GLuint shader)
+inline bool isSPIRV(_In_ GLuint shader)
 {
 	GLint isSpirv = false;
 	glGetShaderiv(shader, GL_SPIR_V_BINARY, &isSpirv);
@@ -197,6 +257,10 @@ static void compileAndAttachSPIRV(_In_ GLuint shader, _In_ GLuint program, _In_ 
 	glSpecializeShader(shader, "main", 0, NULL, NULL);
 	assert(checkCompileStatus(shader));
 	glAttachShader(program, shader);
+}
+static inline bool XOR(bool p, bool q)
+{
+	return (p || q) && !(p && q);
 }
 
 /**
@@ -224,13 +288,13 @@ makeProgramSPIRV(
 	glGetIntegerv(GL_NUM_SHADER_BINARY_FORMATS, &spirvSupport);
 	if (!spirvSupport)
 	{
-		glDebugMessageInsert(GL_DEBUG_SOURCE_APPLICATION, GL_DEBUG_TYPE_ERROR, 2, GL_DEBUG_SEVERITY_HIGH, -1, "The Vendor does not Support SPIRV");
+		cxFATAL(_T("The Vendor does NOT support SPIR-V"));
 		return 0;
 	}
 	assert(spirvSupport != GL_FALSE);
 
 	if (tessEval && !tessCtrl)
-		OutputDebugString(TEXT("WARING: creating program with tesselation evaluation without control.\n"));
+		cxWARN(_T("Creating program with tesselation evaluation without control.\n"));
 #endif // _DEBUG	
 
 	GLuint program = 0;
@@ -249,16 +313,31 @@ makeProgramSPIRV(
 		* gSrc = geometry ? readBinary(geometry, & gSrcLen) : NULL,	//   Geometry SPIRC Source
 		* fSrc = readBinary(fragment, &fSrcLen);						//   fragment SPIRV Source
 	
-	if (!vSrc				||
-		(tessEval && !tcSrc)||
-		(tessCtrl && !teSrc)||
-		(geometry && ! gSrc)||
-		!fSrc)
-	{
-		OutputDebugFormatted(_T("ERROR: could not read one or more SPIR-V files"));
-		goto CLEANUP_SOURCE;
-	}
+	//
+	// GOTOs are generally avoided. personally I make exceptions when it comes to error handling
+	//
 
+	if (vSrc != NULL &&
+		!XOR(tessEval != NULL,teSrc != NULL) &&
+		!XOR(tessCtrl != NULL,tcSrc != NULL) &&
+		!XOR(geometry != NULL, gSrc != NULL) &&
+		fSrc != NULL)
+		//Skip error logging and don't cleanup source.
+		goto CREATE_SHADERS; 
+
+	if (vSrc == NULL)
+		cxERROR(_T("Could not read vertex Shader SPIR-V <%hs>\n"), vertex);
+	if (tessCtrl && tcSrc == NULL)
+		cxERROR(_T("Could not read tesselation control Shader SPIR-V <%hs>\n"), tessCtrl);
+	if (tessEval && teSrc == NULL)
+		cxERROR(_T("Could not read tesselation evaluation Shader SPIR-V <%hs>\n"), tessEval);
+	if (geometry &&  gSrc == NULL)
+		cxERROR(_T("Could not read geometry shader SPIR-V <%hs>\n"), geometry);
+	if (fSrc == NULL)
+		cxERROR(_T("Could not not read fragment shader SPIR-V <%hs>\n"), fragment);
+
+	goto CLEANUP_SOURCE;
+CREATE_SHADERS:
 	GLuint
 		 vShader = glCreateShader(GL_VERTEX_SHADER),					// Vertex shader
 		teShader = teSrc ? glCreateShader(GL_TESS_EVALUATION_SHADER): 0,// Tesselation evalutation shader (optional)
@@ -266,11 +345,13 @@ makeProgramSPIRV(
 		 gShader =  gSrc ? glCreateShader(GL_GEOMETRY_SHADER)		: 0,// Geometry shader (optional)
 		 fShader = glCreateShader(GL_FRAGMENT_SHADER);					// Fragment shader		
 
+#ifdef _DEBUG
 	NAME_OBJECT(GL_SHADER, vShader, vertex);
 	if (teShader) NAME_OBJECT(GL_SHADER, teShader, tessEval);
 	if (tcShader) NAME_OBJECT(GL_SHADER, tcShader, tessCtrl);
 	if ( gShader) NAME_OBJECT(GL_SHADER,  gShader, geometry);
 	NAME_OBJECT(GL_SHADER, fShader, fragment);
+#endif // _DEBUG
 
 	program = glCreateProgram();
 
@@ -331,7 +412,7 @@ struct mesh
 	mat4 matrix;
 	
 };
-void destroy_mesh(struct mesh* m)
+void destroy_mesh(_Inout_ struct mesh* m)
 {
 	arrfree(m->groups);
 	
@@ -346,10 +427,10 @@ void destroy_mesh(struct mesh* m)
 
 _Check_return_ _Success_(return != NULL)
 /**
-	@brief  Creates a stb_ds darray of meshes read from the paths. All vertex data and index data will be stored sequencialy in the vbo and ebo supplied as parameter.
+	@brief  Creates a stb_ds darray of meshes read from the paths. All vertex, index and material data will be stored sequencialy in the vbo, ebo and ubo supplied as parameter. The Factory thus expects them to be 1) newly created and b) not contain any data
 	@param  count - count of paths
 	@param  paths - paths to wavefront obj files (file extension MUST be .obj)
-	@param  vbo   - newly created VBO to fill with vertices	data
+	@param  vbo   - newly created VBO to fill with vertices	data.
 	@param  ebo   - newly created EBO to fill with indices	data
 	@param  mtl   - newly created UBO to fill with materials data
 	@retval       - stb_ds darray of meshes, size being `count`.
@@ -357,9 +438,9 @@ _Check_return_ _Success_(return != NULL)
 inline struct mesh* createMeshes(
 	_In_				uint32_t		count, 
 	_In_reads_(count)	const Path*		paths, 
-	_Inout_				const GLuint	vbo, 
-	_Inout_				const GLuint	ebo, 
-	_Inout_				const GLuint	mtl)
+	_Inout_				GLuint	vbo, 
+	_Inout_				GLuint	ebo, 
+	_Inout_				GLuint	mtl)
 {
 	struct mesh* meshes = NULL;
 
@@ -417,13 +498,13 @@ inline struct mesh* createMeshes(
 
 		}
 		
-		OutputDebugFormatted(_T("Creating mesh \"%hs\".\n"), active.name ? active.name : "NONAME");
+		cxINFO(_T("Creating mesh \"%hs\".\n"), active.name ? active.name : "NONAME");
 
-		const uint32_t mtlCount = (uint32_t)shlenu(mtllib.materialMap);
-		const uint32_t mtlOffset = (uint32_t)arrlenu(materials);
+		const uint32_t 
+			mtlCount  = (uint32_t)shlenu(mtllib.materialMap),
+			mtlOffset = (uint32_t)arrlenu(materials);
 
 		arrsetlen(materials, arrlenu(materials) + mtlCount);
-		
 		
 		const uint32_t groupCount = (uint32_t)arrlenu(obj.groups);
 		for (uint32_t ixG = 0; ixG < groupCount; ixG++)
@@ -550,7 +631,7 @@ CLEANUP:
 
 CLEANUP_INVALID:
 
-	OutputDebugFormatted(_T("Failed to read object in \"%hs\""), path);
+	cxERROR(_T("Failed to read object in \"%hs\""), path);
 
 	wfDestroyObj(&obj);
 	wfDestroyMtllib(&mtllib);
@@ -605,7 +686,6 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 #else
 	glEnable(GL_NO_ERROR);
 #endif // _DEBUG
-	mat4 tmp;
 
 	uint32_t 
 		width = 0,
@@ -613,6 +693,19 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	platform_getDimensions(ctx, &width, &height);
 	assert(width != 0 && height != 0);
 	glViewport(0, 0, width, height);
+
+	//
+	// Driver Constants (specified by the driver, it's thus not possible to optimize around them)
+	//
+
+	const uint32_t 
+		SSBO_ALIGNMENT = getSSBOAlignment(),
+		 TBO_ALIGNMENT = getTBOAlignment(),
+		 UBO_ALIGNMENT = getUBOAlignment();
+
+	const uint32_t 
+		MAX_TEX_UNITS			= getMaxTexUnitCount(),
+		MAX_UNIFORM_BINDINGS	= getMaxUBOBindingCount();
 
 	//
 	// Setup Shaders
@@ -699,10 +792,8 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 		//u_shininess
 		memcpy(block + offset,	&DEFAULT_SHININESS, sizeof(float));	
 	}
-	GLboolean notCorrupted = glUnmapNamedBuffer(defaultMaterialUBO);
-	assert(notCorrupted);
-
-
+	const GLboolean notCorrupted = glUnmapNamedBuffer(defaultMaterialUBO);
+	assert(notCorrupted); //TODO
 
 	//
 	// Create Meshes
@@ -742,6 +833,8 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	struct mesh* meshes = createMeshes(_countof(paths), paths, vbo, ebo, mtls);
 	assert(meshes != NULL);
 	
+	mat4 tmp;
+
 	mat4x4_identity(meshes[0].matrix);
 	//model = translation * rotation * scale 
 	mat4x4_mul(meshes[1].matrix,
@@ -785,12 +878,6 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	glEnableVertexArrayAttrib (vao, 2);
 
 	//
-	// Driver Constants
-	//
-
-	const int32_t UBO_ALIGNMENT = getUBOAlignment();
-
-	//
 	// Render loop variables
 	//
 
@@ -822,21 +909,21 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 		// Handle Mouse and Key inputs
 		//
 
-		struct nk_mouse mouse = ctx->input.mouse;
-		float scrollDelta = mouse.scroll_delta.y;
-		struct nk_input* in = &ctx->input;
+		const struct nk_mouse* mouse = &ctx->input.mouse;
+		const float scrollDelta = mouse->scroll_delta.y;
+		const struct nk_input* in = &ctx->input;
 
-		if (mouse.buttons[NK_BUTTON_RIGHT].down)
+		if (mouse->buttons[NK_BUTTON_RIGHT].down)
 		{
 			if (!hasRightClick)
 			{
 				hasRightClick = true;
-				rightClickOrgin = mouse.pos;
+				rightClickOrgin = mouse->pos;
 			}
 			else
 			{
-				float dX = mouse.pos.x - rightClickOrgin.x; //in mouse coordinates
-				float dY = mouse.pos.y - rightClickOrgin.y; //in mouse coordinates
+				float dX = mouse->pos.x - rightClickOrgin.x; //in mouse coordinates
+				float dY = mouse->pos.y - rightClickOrgin.y; //in mouse coordinates
 
 				float yaw  = toRadians( sensitivity * (dX ) / width);
 				float pitch= toRadians( sensitivity * (dY ) / height);
@@ -907,10 +994,10 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 		
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		size_t meshCount = arrlen(meshes);
+		const size_t meshCount = arrlenu(meshes);
 		for (uint32_t ixMesh = 0; ixMesh < meshCount; ixMesh++)
 		{
-			struct mesh* mesh = meshes + ixMesh;
+			const struct mesh* mesh = meshes + ixMesh;
 
 			//
 			// Setup Graphics Pipeline state
@@ -976,7 +1063,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 				{
 					memcpy(block, cam.wPos, sizeof cam.wPos);
 				}
-				GLboolean notCorrupted = glUnmapNamedBuffer(cameraUBO);
+				const GLboolean notCorrupted = glUnmapNamedBuffer(cameraUBO);
 				assert(notCorrupted); //TODO
 
 				glBindBufferBase(GL_UNIFORM_BUFFER, 1, cameraUBO);
@@ -990,7 +1077,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 					//u_lightColor
 					memcpy(block + 1 * sizeof(vec4), lightColor, sizeof lightColor);
 				}
-				GLboolean notCorrupted = glUnmapNamedBuffer(lightingUBO);
+				const GLboolean notCorrupted = glUnmapNamedBuffer(lightingUBO);
 				assert(notCorrupted); //TODO
 				
 				glBindBufferBase(GL_UNIFORM_BUFFER, 2, lightingUBO);
@@ -1021,8 +1108,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 				}
 				
 				//
-				// When there are multiple meshes stored in the same vbo and ebo,
-				// the meshes are stored sequencialy in both buffers.
+				// When Meshes are batched, the meshes are stored sequencialy in both buffers.
 				//
 
 				if (mesh->vertexOffset != 0)
@@ -1032,7 +1118,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 			}
 		}
 
-		BOOL swapSuccess = platform_swapBuffers(ctx);
+		const bool swapSuccess = platform_swapBuffers(ctx);
 		assert(swapSuccess);
 	}
 	

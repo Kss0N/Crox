@@ -210,6 +210,7 @@
     <ClInclude Include="framework_spirv.h" />
     <ClInclude Include="framework_vulkan.h" />
     <ClInclude Include="framework_winapi.h" />
+    <ClInclude Include="log.h" />
     <ClInclude Include="mesh.h" />
     <ClInclude Include="NullSemantics.h" />
     <ClInclude Include="Platform\Platform.h" />
