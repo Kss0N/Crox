@@ -8,7 +8,7 @@ layout(location = 0) in VData
 	vec3 pos;
 	vec3 normal;
 	vec2 tex;
-}fin;
+};
 
  
 
@@ -35,13 +35,13 @@ layout (std140, binding = 3) uniform MaterialBlock
 void main()
 {
 	vec3 
-		lightDir= normalize(u_lightPos - fin.pos),
-		viewDir = normalize(u_camPos-fin.pos),
+		lightDir= normalize(u_lightPos - pos),
+		viewDir = normalize(u_camPos-pos),
 		halfDir = normalize(lightDir + viewDir), 
-		reflDir = reflect(-lightDir, fin.normal);
+		reflDir = reflect(-lightDir, normal);
 
 	float 
-		diff = max(dot(fin.normal, lightDir), 0.0),
+		diff = max(dot(normal, lightDir), 0.0),
 		spec = pow(max(dot(halfDir, reflDir), 0.0), u_shininess);
 
 	vec3 

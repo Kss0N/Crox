@@ -659,13 +659,20 @@ static void GLAD_API_PTR GLDebugProc(
 	_In_ GLuint id,
 	_In_ GLenum severity,
 	_In_ GLsizei length,
-	_In_ const GLchar* message,
+	_In_z_ const GLchar* message,
 	_In_ const void* userParam)
 {
 	NkContext* ctx = (NkContext*)userParam;
-
-	OutputDebugStringA(message);
-	OutputDebugString(TEXT("\n"));
+	switch (type)
+	{
+	case GL_DEBUG_TYPE_ERROR: cxERROR(_T("OpenGL: %hs\n"), message); break;
+	case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: cxWARN(_T("OpenGL[Deprecated]: %hs\n"), message); break;
+	case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR: cxWARN(_T("OpenGL[Undefined]: %hs\n"), message); break;
+	case GL_DEBUG_TYPE_PORTABILITY: cxWARN(_T("OpenGL[Portability]: %hs\n"), message); break;
+	case GL_DEBUG_TYPE_PERFORMANCE: cxWARN(_T("OpenGL[Performance]: %hs\n"), message); break;
+	default:
+		cxINFO(_T("%hs\n"), message); break;
+	}
 }
 
 
