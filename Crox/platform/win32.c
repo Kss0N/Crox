@@ -723,7 +723,7 @@ FILE* log_setLog(_In_opt_ FILE* newFile)
 	return old;
 }
 
-int log_logEntry(_In_ enum Severity severity, _Printf_format_string_ TCHAR* fmt, ...)
+int log_logEntry(_In_ int severity, _Printf_format_string_ TCHAR* fmt, ...)
 {
 	LPCTSTR strSeverity;
 	switch (severity)	

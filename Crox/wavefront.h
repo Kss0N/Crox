@@ -9,9 +9,6 @@
 #include "mesh.h"
 #include "NullSemantics.h"
 
-
-typedef float* stbi_bmp;
-
 struct WavefrontMesh {
 	struct Vertex* vertices;	// stb_ds array
 	uint32_t* indices;			// stb_ds array
@@ -41,6 +38,15 @@ struct WavefrontMtl
 	vec3 specular;
 	float shininess;
 	float alpha;
+
+	char
+		*ambientMapPath,
+		*diffuseMapPath,
+		*specularMapPath,
+		*shininessMapPath,
+		*alphaMapPath,
+		*bumpMapPath;
+
 	enum WavefrontIlluminationModel model;
 };
 
@@ -91,10 +97,6 @@ inline void wfDestroyObj(struct WavefrontObj* o)
 	}
 }
 
-
-
-struct WavefrontMesh wavefront_read(_In_ FILE* file);
-
 struct WavefrontObj wavefront_obj_read(_In_ FILE* file);
 
 // str -> WavefrontMtl table
@@ -103,19 +105,32 @@ struct WavefrontMtllibKV
 	_Null_terminated_ char* key;
 	struct WavefrontMtl value;
 };
-struct WavefrontMtllib {
-	struct WavefrontMtllibKV* materialMap;	//stb_ds c string map
-	char const** keys;	// stb_ds darray of c strings
-};
-inline void wfDestroyMtllib(struct WavefrontMtllib* mtllib)
+inline void wfDestroyMtllib(struct WavefrontMtllibKV** mtllib)
 {
-	size_t keyCount = arrlenu(mtllib->keys);
-	if (mtllib->keys)
-		for (uint32_t i = 0; i < keyCount; i++)
-			_aligned_free((void*)mtllib->keys[i]);
-	
-	arrfree(mtllib->keys);
-	shfree(mtllib->materialMap);
+	size_t count = shlenu(*mtllib);
+	for (uint32_t i = 0; i < count; i++) if ((*mtllib)[i].key != NULL )
+	{
+		struct WavefrontMtl* mtl = &(*mtllib)[i].value;
+
+		if (mtl->ambientMapPath)
+			free(mtl->ambientMapPath);
+
+		if (mtl->diffuseMapPath)
+			free(mtl->diffuseMapPath);
+
+		if (mtl->specularMapPath)
+			free(mtl->specularMapPath);
+
+		if (mtl->shininessMapPath)
+			free(mtl->shininessMapPath);
+
+		if (mtl->alphaMapPath);
+			free(mtl->alphaMapPath);
+
+		if (mtl->bumpMapPath)
+			free(mtl->bumpMapPath);
+	}
+	shfree(*mtllib);
 }
 
 /**
@@ -123,4 +138,4 @@ inline void wfDestroyMtllib(struct WavefrontMtllib* mtllib)
 	@param   file 
 	@returns stb_ds string->WavefrontMtl hashmap.
 **/
-struct WavefrontMtllib wavefront_mtl_read(_In_ FILE* file);
+struct WavefrontMtllibKV* wavefront_mtl_read(_In_ FILE* file);

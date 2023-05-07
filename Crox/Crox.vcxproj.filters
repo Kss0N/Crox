@@ -25,9 +25,6 @@
     <Filter Include="Source Files\platform">
       <UniqueIdentifier>{d1c14016-b129-431a-807f-f9e1dec27588}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Shader Files">
-      <UniqueIdentifier>{e6400632-4fae-46a2-8088-e151cc4ea213}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Resource Files\meshes">
       <UniqueIdentifier>{bcdcac5a-2577-4a18-b490-b89bc55be9c5}</UniqueIdentifier>
     </Filter>
@@ -51,6 +48,9 @@
     </Filter>
     <Filter Include="Resource Files\meshes\wavefront\Suzanne">
       <UniqueIdentifier>{00198ad3-ebfe-4f18-9ce1-778d76299346}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shader Source Files">
+      <UniqueIdentifier>{e6400632-4fae-46a2-8088-e151cc4ea213}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -151,16 +151,16 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="default.vert">
-      <Filter>Shader Files</Filter>
+      <Filter>Shader Source Files</Filter>
     </None>
     <None Include="default.frag">
-      <Filter>Shader Files</Filter>
+      <Filter>Shader Source Files</Filter>
     </None>
     <None Include="3D.vert">
-      <Filter>Shader Files</Filter>
+      <Filter>Shader Source Files</Filter>
     </None>
     <None Include="3D.frag">
-      <Filter>Shader Files</Filter>
+      <Filter>Shader Source Files</Filter>
     </None>
     <None Include="..\rsc\mesh\cube.mtl">
       <Filter>Resource Files\meshes\wavefront\cube</Filter>
@@ -187,7 +187,7 @@
       <Filter>Resource Files\meshes\wavefront\biplane</Filter>
     </None>
     <None Include="quick3D.frag">
-      <Filter>Shader Files</Filter>
+      <Filter>Shader Source Files</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>

@@ -28,158 +28,18 @@
 #include <math.h>
 #include <tchar.h>
 
-
-#ifdef _DEBUG
-int OutputDebugFormatted(
-	_In_z_ _Printf_format_string_params_(1) const TCHAR* format, ...)
-{
-	TCHAR buffer[4096];
-
-	va_list args;
-	va_start(args, format);
-
-	int result = _vstprintf(buffer, 1024, format, args);
-	if (result != 0)
-	{
-		OutputDebugString(buffer);
-	}
-	va_end(args);
-	return result;
-}
-#else
-#define OutputDebugFormatted(f, ...)
-#endif // _DEBUG
-
 #define NAME_OBJECT(type, obj, name) glObjectLabel(type, obj, -(signed)strlen(name),name);
 
 typedef _Null_terminated_ const char* Path;
 
-static GLuint makeShader(GLenum type, const char* path)
+inline const int32_t getDriverConstant(GLenum property)
 {
-	char error[256];
-	char* source = stb_include_file((char*)path, NULL, NULL, error);
-	if (source == NULL)
-	{
-		glDebugMessageInsert(GL_DEBUG_SOURCE_THIRD_PARTY, GL_DEBUG_TYPE_ERROR, 1, GL_DEBUG_SEVERITY_HIGH, -(signed)strlen(error), error); 
-		return 0;
-	}
-	size_t length = strlen(source);
-
-	GLuint shader = glCreateShader(type);
-	NAME_OBJECT(GL_SHADER, shader, path);
-
-	glShaderSource(shader, 1, &source, &(GLint)length);
-	glCompileShader(shader);
-
-	GLint isCompiled = false;
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &isCompiled);
-
-#ifndef glDebugMessageCallback
-	if (!isCompiled)
-	{
-		GLuint len = 0;
-		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
-		assert(len != 0);
-		const char* msg = malloc(len * sizeof * msg);
-		glGetShaderInfoLog(shader, len, NULL, msg);
-		OutputDebugStringA(msg);
-		free(msg);
-
-		glDeleteShader(shader);
-		shader = 0;
-	}
-#endif // glDebugMessageCallback
-	
-	if (!isCompiled)
-	{
-		glDeleteShader(shader);
-		shader = 0;
-	}
-
-	free(source);
-	return shader;
+	int32_t a;
+	glGetIntegerv(property, &a);
+	return a;
 }
 
-//TODO
-static GLuint makeProgramGLSL(
-	_In_		Path		vertex,
-	_In_opt_	Path		tessEval,
-	_In_opt_	Path		tessCtrl,
-	_In_opt_	Path		geometry,
-	_In_		Path		fragment)
-{
-	return 0;
-}
-
-/**
-	@brief  As it's possible to bind parts of a UBO to a bind position, the parts must be aligned. the alignment is determined by the driver.
-	@retval  - base Alignment for UBO ranges 
-**/
-
-inline const uint32_t getSSBOAlignment()
-{
-	int32_t alignment;
-	glGetIntegerv(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT, &alignment);
-	return (uint32_t)alignment;
-}
-inline const uint32_t getTBOAlignment()
-{
-	int32_t alignment;
-	glGetIntegerv(GL_TEXTURE_BUFFER_OFFSET_ALIGNMENT, &alignment);
-	return (uint32_t)alignment;
-}
-inline const uint32_t getUBOAlignment()
-{
-	int32_t alignment;
-	glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &alignment);
-	return (uint32_t)alignment;
-}
-
-inline const uint32_t getMaxSSBOBindingCount() {
-	int32_t c;
-	glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &c);
-	return (uint32_t)c;
-}
-inline const uint32_t getMaxTexUnitCount()
-{
-	int32_t c;
-	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &c);
-	return (uint32_t)c;
-}
-inline const uint32_t getMaxUBOBindingCount() 
-{
-	int32_t c;
-	glGetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS , &c);
-	return (uint32_t)c;
-}
-
-inline const uint32_t getMaxSSBOBlockSize()
-{
-	int32_t s;
-	glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &s);
-	return (uint32_t)s;
-}
-inline const uint32_t getMaxTBOSize()
-{
-	int32_t s;
-	glGetIntegerv(GL_MAX_TEXTURE_BUFFER_SIZE, &s);
-	return (uint32_t)s;
-}
-inline const uint32_t getMaxTexSize()
-{
-	int32_t s;
-	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &s);
-	return (uint32_t)s;
-}
-inline const uint32_t getMaxUBOBlockSize() 
-{
-	int32_t s;
-	glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE , &s);
-	return (uint32_t)s;
-}
-
-
-static const unsigned char* readBinary(_In_z_ Path p, _Out_ size_t* len)
+static const uint8_t* readBinary(_In_z_ Path p, _Out_ size_t* len)
 {
 	FILE* f;
 	fopen_s(&f, p, "rb");
@@ -194,7 +54,7 @@ static const unsigned char* readBinary(_In_z_ Path p, _Out_ size_t* len)
 
 	*len = (size_t) ftell(f);
 	fseek(f, 0, SEEK_SET);
-	char* data = malloc(*len+1);
+	uint8_t* data = malloc(*len+1);
 	assert(data != NULL); //TODO
 
 	
@@ -310,8 +170,8 @@ makeProgramSPIRV(
 		* vSrc = readBinary( vertex, &vSrcLen),						//	   Vertex SPIRV Source
 		*teSrc = tessEval ? readBinary(tessEval, &tcSrcLen) : NULL,	//	Tess Eval SPIRV source
 		*tcSrc = tessCtrl ? readBinary(tessCtrl, &teSrcLen) : NULL,	//	Tess Ctrl SPIRV source
-		* gSrc = geometry ? readBinary(geometry, & gSrcLen) : NULL,	//   Geometry SPIRC Source
-		* fSrc = readBinary(fragment, &fSrcLen);						//   fragment SPIRV Source
+		* gSrc = geometry ? readBinary(geometry, & gSrcLen) : NULL,	//   Geometry SPIRV Source
+		* fSrc = readBinary(fragment, &fSrcLen);					//   fragment SPIRV Source
 	
 	//
 	// GOTOs are generally avoided. personally I make exceptions when it comes to error handling
@@ -322,8 +182,9 @@ makeProgramSPIRV(
 		!XOR(tessCtrl != NULL,tcSrc != NULL) &&
 		!XOR(geometry != NULL, gSrc != NULL) &&
 		fSrc != NULL)
-		//Skip error logging and don't cleanup source.
 		goto CREATE_SHADERS; 
+
+	// Failure to load: log errors and cleanup.
 
 	if (vSrc == NULL)
 		cxERROR(_T("Could not read vertex Shader SPIR-V <%hs>\n"), vertex);
@@ -389,11 +250,78 @@ CLEANUP_SOURCE:
 }
 
 
+struct TexInfo {
+	uint16_t
+		xOffset, yOffset,
+		width, height;
+};
+
+static void uploadToMaterialBuffer(uint8_t* buf, 
+	vec3 kAmbient, 
+	vec3 kDiffuse, 
+	vec3 kSpecular, 
+	float nAlpha, 
+	float nShininess)
+{
+	size_t offset = 0;
+
+	//u_ambientColor
+	memcpy(buf + offset, kAmbient, sizeof(vec3));
+	offset += sizeof(vec3);
+
+	//u_alpha
+	memcpy(buf + offset, &nAlpha, sizeof(float));
+	offset += sizeof(float);
+
+	//u_diffuseColor
+	memcpy(buf + offset, kDiffuse, sizeof(vec3));
+	offset += sizeof(vec3);
+
+	//u_shininess
+	memcpy(buf + offset, &nShininess, sizeof(float));
+	offset += sizeof(float);
+
+	//u_specularColor
+	memcpy(buf + offset, kSpecular, sizeof(vec3));
+	offset += sizeof(vec3);
+	
+}
+
+static bool parseMap(_In_ const char* path, _Out_ stbi_uc** pImage, _Out_ struct TexInfo* pInfo)
+{
+	struct TexInfo info = {0,0,0,0};
+
+	int width, height, eChannelLayout;
+	stbi_uc* img = stbi_load(path, &width, &height, &eChannelLayout, STBI_rgb_alpha);
+	if (img)
+	{
+		*pImage = img;
+		*pInfo = info;
+		return true;
+	}
+	*pImage = NULL;
+	*pInfo = info;
+	return false;
+}
+
+// when the there are less than 2^16 vertices, the indices should be of type uint16_t on the GPU side, as to half the memory footprint.
+static size_t indicesByteSize(size_t vertexCount, size_t indexCount)
+{
+	return vertexCount < UINT16_MAX
+		? indexCount * sizeof(uint16_t) + 2 * (indexCount % 2)
+		: indexCount * sizeof(uint32_t)
+		;
+}
+
+
+
 struct group {
-	uint32_t ixFirst;
-	uint32_t count;
+	uint32_t 
+		ixFirst,
+		count;
 
 	int32_t ixMaterial;
+	uint32_t materialSize;
 };
 
 struct mesh
@@ -402,9 +330,9 @@ struct mesh
 	LPCSTR name;
 
 
-	uint32_t vertexCount;	//count of elements
-	uint32_t vertexOffset;	//count of preceeding elements
-	uint32_t indexOffset;	//count of preceeding elements
+	uint32_t vertexCount;	//count of vertices
+	uint32_t vertexOffset;	//count of preceeding vertices in batch
+	uint32_t indexOffset;	//byte Offset into index batch
 
 	GLuint vao;
 	GLuint program;
@@ -432,33 +360,53 @@ _Check_return_ _Success_(return != NULL)
 	@param  paths - paths to wavefront obj files (file extension MUST be .obj)
 	@param  vbo   - newly created VBO to fill with vertices	data.
 	@param  ebo   - newly created EBO to fill with indices	data
-	@param  mtl   - newly created UBO to fill with materials data
+	@param  ubo   - newly created UBO to fill with materials data
+	@param  atlas - newly created tex2D to fill with images for materials 
 	@retval       - stb_ds darray of meshes, size being `count`.
 **/
 inline struct mesh* createMeshes(
-	_In_				uint32_t		count, 
-	_In_reads_(count)	const Path*		paths, 
-	_Inout_				GLuint	vbo, 
-	_Inout_				GLuint	ebo, 
-	_Inout_				GLuint	mtl)
+	_In_				uint32_t	count, 
+	_In_reads_(count)	const Path*	paths, 
+	_Inout_				GLuint		vbo, 
+	_Inout_				GLuint		ebo, 
+	_Inout_				GLuint		ubo,
+	_Inout_				GLuint		atlas)
 {
+	// Returns
 	struct mesh* meshes = NULL;
 
-	uint32_t vertexCount = 0;
-	uint32_t  indexCount = 0;
-	struct Vertex** verticesV = NULL;	// stb_ds Vector of vertex arrays
-	uint32_t** indicesV = NULL;			// stb_ds Vector of element arrays
-	void** materials = NULL;			// stb_ds Vector of material buffers
+	//
+	// Utilities
+	//
 
-	uint32_t materialCount = 0;
+	struct Material 
+	{
+		void* buffer;
+		// -1 means that the material does not use a map for that property
+		int32_t
+			ixMapAmbient,
+			ixMapDiffuse,
+			ixMapSpecular,
+			ixMapAlphaShininess; //Since the alpha map will only use the A channel, the Shinniness map could be appended ontop of it, using the R channel, thus saving space from reduncandies
+	};
 
+	uint32_t 
+		vertexCount = 0,
+	      indexSize = 0;
+	struct Vertex	**verticesV = NULL;	// stb_ds Vector of vertex arrays
+	uint32_t		**indicesV  = NULL;	// stb_ds Vector of element arrays
+	struct Material	* materials = NULL;	// stb_ds Vector of material buffers
+	struct TexInfo	* maps		= NULL; // stb_ds Vector of material maps.
+	stbi_uc			**images	= NULL; // stb_ds Vector of map images
 
 	struct WavefrontObj obj;
-	struct WavefrontMtllib mtllib;
+	struct WavefrontMtllibKV* mtllib = NULL;
 
-	char* mtllibPath = _aligned_malloc(MAX_PATH, 8);
+	char
+		* mtllibPath = _aligned_malloc(MAX_PATH, 8),
+		* imagePath = _aligned_malloc(MAX_PATH, 8);
 
-	const int32_t UBO_ALIGNMENT = getUBOAlignment();
+	const int32_t UBO_ALIGNMENT = getDriverConstant(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT);
 
 	struct mesh active;
 	Path path;
@@ -487,7 +435,7 @@ inline struct mesh* createMeshes(
 			if (err != 0)
 				goto CLEANUP_INVALID;
 			mtllib = wavefront_mtl_read(file);
-			assert(mtllib.keys != NULL);
+			assert(shlenu(mtllib) > 0);
 			fclose(file);
 		}
 		if (obj.name)
@@ -495,17 +443,17 @@ inline struct mesh* createMeshes(
 			//Let's be a bit clever and just transfer ownership.
 			active.name = obj.name;
 			obj.name = NULL;
-
 		}
 		
 		cxINFO(_T("Creating mesh \"%hs\".\n"), active.name ? active.name : "NONAME");
 
 		const uint32_t 
-			mtlCount  = (uint32_t)shlenu(mtllib.materialMap),
+			mtlCount  = mtllib ? (uint32_t)shlenu(mtllib) : 0,
 			mtlOffset = (uint32_t)arrlenu(materials);
 
-		arrsetlen(materials, arrlenu(materials) + mtlCount);
-		
+		if (mtlCount > 0)
+			arrsetlen(materials, arrlenu(materials) + mtlCount);
+			
 		const uint32_t groupCount = (uint32_t)arrlenu(obj.groups);
 		for (uint32_t ixG = 0; ixG < groupCount; ixG++)
 		{
@@ -517,39 +465,125 @@ inline struct mesh* createMeshes(
 				.ixMaterial = -1,
 			};
 
-			const struct WavefrontMtl* pMaterial = &shgetp(mtllib.materialMap, group->mtlName)->value;
-			const uint32_t ixMtl = (uint32_t)shgeti(mtllib.materialMap, group->mtlName);
+			//
+			// Parse material. If Group has no material, use some default material.
+			//
+			
+			const uint32_t ixMtl = (uint32_t)shgeti(mtllib, group->mtlName);
 			if (ixMtl != -1)
 			{
+				cxINFO(_T("\tParsing Material \"%hs\"\n"), group->mtlName);
+				const struct WavefrontMtl* pM = &shgetp(mtllib, group->mtlName)->value;
+
 				//NOTE: materials are specified per the uniform `MaterialBlock` in file `3D.frag`
 				//TODO: make this more "shader agnostic"
+
+				//TODO: merge alpha and shininess mapc
+				stbi_uc
+					* ambientMap		= NULL,
+					* diffuseMap		= NULL,
+					* specularMap		= NULL,
+					* normalMap			= NULL,
+					* alphaShininessMap = NULL, //TODO
+					* alphaMap			= NULL,
+					* shininessMap		= NULL;
+				struct TexInfo
+					ambientInfo			= { 0 },
+					diffuseInfo			= { 0 },
+					specularInfo		= { 0 },
+					normalInfo			= { 0 },
+					alphaShininessInfo	= { 0 }, //TODO
+					alphaInfo			= { 0 },
+					shininessInfo		= { 0 };
+
+
+				if (pM->ambientMapPath)
+				{
+					cwk_path_change_basename(path, pM->ambientMapPath, imagePath, MAX_PATH);
+					if (!parseMap(imagePath, &ambientMap, &ambientInfo))
+						goto CLEANUP_INVALID;					
+				}
+				if (pM->diffuseMapPath)
+				{
+					cwk_path_change_basename(path, pM->diffuseMapPath, imagePath, MAX_PATH);
+					if (!parseMap(imagePath, &diffuseMap, &diffuseInfo))
+						goto CLEANUP_INVALID;
+				}
+				if (pM->specularMapPath)
+				{
+					cwk_path_change_basename(path, pM->specularMapPath, imagePath, MAX_PATH);
+					if (!parseMap(imagePath, &specularMap, &specularInfo))
+						goto CLEANUP_INVALID;	
+				}
+				if (pM->bumpMapPath)
+				{
+					cwk_path_change_basename(path, pM->bumpMapPath, imagePath, MAX_PATH);
+					if (!parseMap(imagePath, &normalMap, &normalInfo))
+						goto CLEANUP_INVALID;	
+				}
+
+				if (pM->alphaMapPath || pM->shininessMapPath)
+				{
+					if (pM->alphaMapPath)
+					{
+						cwk_path_change_basename(path, pM->alphaMapPath, imagePath, MAX_PATH);
+						if (!parseMap(imagePath, &alphaMap, &alphaInfo))
+							goto CLEANUP_INVALID;
+					}
+					if (pM->shininessMapPath)
+					{
+						cwk_path_change_basename(path, pM->shininessMapPath, imagePath, MAX_PATH);
+						struct TexInfo info;
+						stbi_uc* image;
+						if (!parseMap(imagePath, &shininessMap, &shininessInfo))
+							goto CLEANUP_INVALID;
+					}
+
+					//alpha, but not shininess
+					if (alphaMap && !shininessMap)
+					{
+						alphaShininessMap = alphaMap;
+						alphaShininessInfo = alphaInfo;
+						goto SKIP_MERGE;
+					}
+					
+					//shininess, but not alpha
+					if (shininessMap && !alphaMap)
+					{
+						alphaShininessMap = shininessMap;
+						alphaShininessInfo = shininessInfo;
+						goto SKIP_MERGE;
+					}
+
+					//
+					//alpha and shininess => merge both images into one.
+					//
+
+					//TODO: merge images
+
+				}
+			SKIP_MERGE: 
 
 				uint8_t* mtlBuf = (uint8_t*)_aligned_malloc(0x80, UBO_ALIGNMENT);
 				if (!mtlBuf) continue; //then it will just use the default material.
 
-				size_t offset = 0;
 
-				//u_ambientColor
-				memcpy(mtlBuf + offset, &pMaterial->ambient, sizeof(vec3));
-				offset += sizeof(vec4);
+				struct Material mat = {
+					.buffer = mtlBuf,
+				};
 
-				//u_diffuseColor
-				memcpy(mtlBuf + offset, &pMaterial->diffuse, sizeof(vec3));
-				offset += sizeof(vec4);
+				
+				
 
-				//u_specularColor
-				memcpy(mtlBuf + offset, &pMaterial->specular, sizeof(vec3));
-				offset += sizeof(vec3);
 
-				//u_alpha
-				memcpy(mtlBuf + offset, &pMaterial->alpha, sizeof(float));
-				offset += sizeof(float);
+				
+				
 
-				//u_shininess
-				memcpy(mtlBuf + offset, &pMaterial->shininess, sizeof(float));
+				
+				uploadToMaterialBuffer(mtlBuf, pM->ambient, pM->diffuse, pM->specular, pM->alpha, pM->shininess);
 
 				const uint32_t ixMaterial = mtlOffset + ixMtl;
-				materials[ixMaterial] = (void*)mtlBuf;
+				materials[ixMaterial].buffer = (void*)mtlBuf;
 				g.ixMaterial = ixMaterial;
 			}
 			arrput(active.groups, g);
@@ -557,10 +591,11 @@ inline struct mesh* createMeshes(
 		
 		active.vertexCount = (uint32_t)arrlen(obj.vertices);
 		active.vertexOffset = vertexCount;
-		active.indexOffset = indexCount;
+		active.indexOffset = indexSize;
 
 		vertexCount += (uint32_t)arrlen(obj.vertices);
-		indexCount += (uint32_t)arrlen(obj.indices);
+		
+		indexSize += indicesByteSize(active.vertexCount, arrlenu(obj.indices));
 
 		//transfer ownership from obj to verticesV and indicesV
 		arrput(verticesV, obj.vertices);
@@ -572,75 +607,87 @@ inline struct mesh* createMeshes(
 		arrput(meshes, active);
 	}
 
-	//Now let's upload the vertices and indices to the VBO and EBO
+	//Now let's upload the vertices, indices  and materials to the VBO, EBO and UBO.
 
-	size_t vertexDataSize = sizeof(struct Vertex) * vertexCount;
-	size_t  indexDataSize = sizeof(uint32_t) * indexCount;
+	const size_t
+		vertexDataSize = vertexCount * sizeof(struct Vertex),
+		  materialSize  = UBO_ALIGNMENT * arrlenu(materials);
 	
-	glNamedBufferData(vbo, vertexDataSize, NULL, GL_STATIC_DRAW);
-	glNamedBufferData(ebo,  indexDataSize, NULL, GL_STATIC_DRAW);
-	glNamedBufferData(mtl, arrlenu(materials) * UBO_ALIGNMENT, NULL, GL_STATIC_DRAW);
+	glNamedBufferData(vbo, vertexDataSize,	NULL, GL_STATIC_DRAW);
+	glNamedBufferData(ebo,      indexSize,	NULL, GL_STATIC_DRAW);
+	glNamedBufferData(ubo,   materialSize,	NULL, GL_STATIC_DRAW);
+
 
 	size_t 
-		indexOffset = 0,
 		vertexOffset = 0;
+	uint8_t* pIndices = glMapNamedBuffer(ebo, GL_WRITE_ONLY);
+
 	for (uint32_t ix = 0; ix < count; ix++)
 	{
 		struct mesh* m = meshes + ix;
 
 		uint32_t indicesCount = (uint32_t)arrlen(indicesV[ix]);
-
-		size_t indicesDataSize = sizeof(uint32_t) * indicesCount;
-		size_t indexByteOffset = sizeof(uint32_t) * indexOffset;
+		size_t indicesDataSize = indicesByteSize(m->vertexCount, indicesCount);
 
 		size_t verticesDataSize = sizeof(struct Vertex) * m->vertexCount;
 		size_t vertexByteOffset = sizeof(struct Vertex) * m->vertexOffset;
 
 		glNamedBufferSubData(vbo, vertexByteOffset, verticesDataSize, verticesV[ix]);
-		glNamedBufferSubData(ebo,  indexByteOffset,  indicesDataSize,  indicesV[ix]);
-		
-		assert(vertexOffset == m->vertexOffset);
 
-		 indexOffset += arrlen( indicesV[ix]);
+		if (m->vertexCount > UINT16_MAX)
+			memcpy_s(pIndices, indicesDataSize, indicesV[ix], indicesDataSize);
+		else for (uint32_t i = 0; i < indicesCount; i++) 
+			((uint16_t*)pIndices)[i] = (uint16_t)(indicesV[ix][i]);
+
+		pIndices += indicesDataSize;
 		vertexOffset += arrlen(verticesV[ix]);
-		
 	}
-	assert(indexOffset == indexCount);
+	bool notCorrupted = glUnmapNamedBuffer(ebo);
+	assert(notCorrupted);
+
 	assert(vertexOffset == vertexCount);
 
-	size_t mtlOffset = 0;
+	size_t 
+		mtlOffset = 0;
 	for (uint32_t i = 0; i < arrlenu(materials); i++)
 	{
-		glNamedBufferSubData(mtl, i * UBO_ALIGNMENT, UBO_ALIGNMENT, materials[i]);
+		glNamedBufferSubData(ubo, i * UBO_ALIGNMENT, UBO_ALIGNMENT, materials[i].buffer);
 	}
 
 CLEANUP:
+	for (uint32_t i = 0; i < arrlenu(images); i++)
+	{
+		stbi_image_free(images[i]);
+	}
 	for (uint32_t i = 0; i < arrlenu(materials); i++)
 	{
-		_aligned_free(materials[i]);
+		_aligned_free(materials[i].buffer);
 	}
-	for (uint32_t i = 0; i < arrlen(verticesV); i++)
+	for (uint32_t i = 0; i < arrlenu(verticesV); i++)
 	{
 		arrfree(verticesV[i]);
 		arrfree( indicesV[i]);
 	}
 	arrfree(verticesV);
-	arrfree(indicesV);
+	arrfree( indicesV);
+
 	_aligned_free(mtllibPath);
+	_aligned_free(imagePath);
+
 	return meshes;
 
-CLEANUP_INVALID:
+CLEANUP_INVALID: {
+		cxERROR(_T("Failed to read object in \"%hs\"\n"), path);
 
-	cxERROR(_T("Failed to read object in \"%hs\""), path);
+		wfDestroyObj(&obj);
+		wfDestroyMtllib(&mtllib);
+		destroy_mesh(&active);
 
-	wfDestroyObj(&obj);
-	wfDestroyMtllib(&mtllib);
-	destroy_mesh(&active);
-
-	for (uint32_t i = 0; i < arrlen(meshes); i++)
-		destroy_mesh(meshes + i);
-	arrfree(meshes);
-	goto CLEANUP;
+		for (uint32_t i = 0; i < arrlen(meshes); i++)
+			destroy_mesh(meshes + i);
+		arrfree(meshes);
+		goto CLEANUP;
+	}
 }
 
 static GLuint createUBO(GLsizei maxSize, GLenum usage)
@@ -694,25 +741,18 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	glEnable(GL_NO_ERROR);
 #endif // _DEBUG
 
-	uint32_t 
-		width = 0,
-		height = 0;
-	platform_getDimensions(ctx, &width, &height);
-	assert(width != 0 && height != 0);
-	glViewport(0, 0, width, height);
-
 	//
 	// Driver Constants (specified by the driver, it's thus not possible to optimize around them)
 	//
 
 	const uint32_t 
-		SSBO_ALIGNMENT = getSSBOAlignment(),
-		 TBO_ALIGNMENT = getTBOAlignment(),
-		 UBO_ALIGNMENT = getUBOAlignment();
+		SSBO_ALIGNMENT = getDriverConstant(GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT),
+		 TBO_ALIGNMENT = getDriverConstant(GL_TEXTURE_BUFFER_OFFSET_ALIGNMENT),
+		 UBO_ALIGNMENT = getDriverConstant(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT);
 
 	const uint32_t 
-		MAX_TEX_UNITS			= getMaxTexUnitCount(),
-		MAX_UNIFORM_BINDINGS	= getMaxUBOBindingCount();
+		MAX_TEX_UNITS		= getDriverConstant(GL_MAX_TEXTURE_IMAGE_UNITS),
+		MAX_UNIFORM_BINDINGS= getDriverConstant(GL_MAX_UNIFORM_BUFFER_BINDINGS);
 
 	//
 	// Setup Shaders
@@ -740,7 +780,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 
 			   lightingUBO = createUBO(2 * sizeof(vec4), GL_DYNAMIC_DRAW),
 
-		defaultMaterialUBO = createUBO(5 * sizeof(vec4),  GL_STATIC_DRAW);
+		defaultMaterialUBO = createUBO(4 * sizeof(vec4),  GL_STATIC_DRAW);
 	
 	if			(matrixUBO)	NAME_OBJECT(GL_BUFFER,			matrixUBO,					 "<Matrix Uniform Buffer>");
 	if			(cameraUBO)	NAME_OBJECT(GL_BUFFER,			cameraUBO,			"<Camera Position Uniform Buffer>");
@@ -757,9 +797,6 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	const float DEFAULT_SHININESS= 1.45f;
 	const float DEFAULT_ALPHA	 = 1.0f;
 
-	const vec3 lightPos = { 5, 5, 0 };
-	const vec3 lightColor = { 1, 1, 1 };
-
 	const vec3 BEGIN_POS = { 0,0,-10 };		
 	const float speed = .1f;				
 	const float sensitivity = 1.f;		
@@ -767,37 +804,16 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	const float zNear = .1f;
 	const float zFar = 100.0f;
 
-	struct Camera cam = { 0 };
-	camera_projection_perspective(&cam, 
-		FOV,		
-		(float)width / height, 
-		zNear,			
-		zFar);		
-	camera_worldPosition_set(&cam, BEGIN_POS);
-	camera_direction_set(&cam, NULL);
+	const vec3 lightPos = { 5, 5, 0 };
+	const vec3 lightColor = { 1, 1, 1 };
+
+	//
+	// Specify Default Material
+	//
 
 	uint8_t* block = glMapNamedBuffer(defaultMaterialUBO, GL_WRITE_ONLY);
 	{
-		size_t offset = 0;
-
-		//u_ambientColor
-		memcpy(block + offset,	 DEFAULT_AMBIENT, sizeof(vec3));
-		offset += sizeof(vec4);
-
-		//u_diffuseColor
-		memcpy(block + offset,   DEFAULT_DIFFUSE, sizeof(vec3));
-		offset += sizeof(vec4);
-
-		//u_specularColor
-		memcpy(block + offset,	 DEFAULT_SPECULAR, sizeof(vec3));
-		offset += sizeof(vec3);
-
-		//u_alpha
-		memcpy(block + offset,  &DEFAULT_ALPHA,		sizeof(float));
-		offset += sizeof(float);
-
-		//u_shininess
-		memcpy(block + offset,	&DEFAULT_SHININESS, sizeof(float));	
+		uploadToMaterialBuffer(block, DEFAULT_AMBIENT, DEFAULT_DIFFUSE, DEFAULT_SPECULAR, DEFAULT_ALPHA, DEFAULT_SHININESS);
 	}
 	const GLboolean notCorrupted = glUnmapNamedBuffer(defaultMaterialUBO);
 	assert(notCorrupted); //TODO
@@ -805,11 +821,6 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	//
 	// Create Meshes
 	//
-
-	GLuint vao;
-	glCreateVertexArrays(1, &vao);
-	assert(vao != 0);
-	NAME_OBJECT(GL_VERTEX_ARRAY, vao, "<Batch Vertex Array Object>");
 
 	GLuint vbo; // Vertices
 	glCreateBuffers(1, &vbo);
@@ -826,6 +837,10 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	assert(mtls != 0);
 	NAME_OBJECT(GL_BUFFER, mtls,"<Mesh Batch Materials>");
 
+	GLuint atlas;
+	glCreateTextures(GL_TEXTURE_2D, 1, &atlas);
+	assert(atlas != 0);
+	NAME_OBJECT(GL_TEXTURE, atlas, "<Batch's Atlas>");
 
 	//BIG TODO: fix this mess... and make it configurable too.
 	const Path paths[] = {
@@ -837,12 +852,13 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 		"../../../rsc/mesh/sphere.obj"
 	};
 
-	struct mesh* meshes = createMeshes(_countof(paths), paths, vbo, ebo, mtls);
+	struct mesh* meshes = createMeshes(_countof(paths), paths, vbo, ebo, mtls, atlas);
 	assert(meshes != NULL);
 	
 	mat4 tmp;
 
 	mat4x4_identity(meshes[0].matrix);
+	
 	//model = translation * rotation * scale 
 	mat4x4_mul(meshes[1].matrix,
 		mat4x4_translate(meshes[1].matrix, lightPos[0], lightPos[1], lightPos[2]),
@@ -852,16 +868,14 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	mat4x4_translate(meshes[4].matrix, 15, 0, 0);
 	mat4x4_translate(meshes[5].matrix, 5, 5, 5);
 
-	for (uint32_t ix = 0; ix < arrlen(meshes); ix++)
-	{
-		struct mesh* m = &meshes[ix];
-		m->program = program;
-		m->vao = vao;
-	}
-
 	//
 	// Specify Vertex Format
 	//
+
+	GLuint vao;
+	glCreateVertexArrays(1, &vao);
+	assert(vao != 0);
+	NAME_OBJECT(GL_VERTEX_ARRAY, vao, "<Batch Vertex Array Object>");
 
 	const GLuint ixBind = 0;
 	const size_t offset = 0L;
@@ -884,9 +898,45 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	glVertexArrayAttribFormat (vao, 2, COMPONENTS(vec2), GL_FLOAT, false, offsetof(struct Vertex, texcoord0));
 	glEnableVertexArrayAttrib (vao, 2);
 
+	for (uint32_t ix = 0; ix < arrlen(meshes); ix++)
+	{
+		struct mesh* m = &meshes[ix];
+		m->program = program;
+		m->vao = vao;
+	}
+
+	//
+	// Specify sampling for Atlas
+	//
+
+	GLuint sampler;
+	glCreateSamplers(1, &sampler);
+	//GL_TEXTURE_MIN_LOD, GL_TEXTURE_MAX_LOD, GL_TEXTURE_LOD_BIAS GL_TEXTURE_COMPARE_MODE, or GL_TEXTURE_COMPARE_FUNC
+	glSamplerParameteri (sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glSamplerParameteri (sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glSamplerParameteri (sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glSamplerParameteri (sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	GLfloat samplerBorderColor[4] = {0, 0, .2f, 1.0f};
+	glSamplerParameterfv(sampler, GL_TEXTURE_BORDER_COLOR, samplerBorderColor);
+
 	//
 	// Render loop variables
 	//
+
+	uint32_t
+		width = 0,
+		height = 0;
+	platform_getDimensions(ctx, &width, &height);
+	assert(width != 0 && height != 0);
+
+	struct Camera cam = { 0 };
+	camera_projection_perspective(&cam,
+		FOV,
+		(float)width / height,
+		zNear,
+		zFar);
+	camera_worldPosition_set(&cam, BEGIN_POS);
+	camera_direction_set(&cam, NULL);
 
 	bool hasRightClick = false;
 	struct nk_vec2 rightClickOrgin;
@@ -898,9 +948,8 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
-
 	glClearColor(0, 0, 0, 1.0f);
-	
+	glBindSampler(0, sampler);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	
@@ -1093,7 +1142,8 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 			//
 			// Setup the material for each group and draw.
 			//
-
+			
+			const GLenum indexStoreType = mesh->vertexCount > UINT16_MAX ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
 			const size_t groupCount = arrlen(mesh->groups);
 			if (groupCount == 0)
 			{
@@ -1107,9 +1157,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 				if (ixMaterialBlock != -1)
 				{
 					if (g->ixMaterial != -1)
-					{
 						glBindBufferRange(GL_UNIFORM_BUFFER, 3, mtls, g->ixMaterial * UBO_ALIGNMENT, 0x50);
-					}
 					else
 						glBindBufferBase(GL_UNIFORM_BUFFER, 3, defaultMaterialUBO);
 				}
@@ -1119,9 +1167,9 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 				//
 
 				if (mesh->vertexOffset != 0)
-					glDrawElementsBaseVertex(GL_TRIANGLES, g->count, GL_UNSIGNED_INT, (void*)(sizeof(uint32_t) * (g->ixFirst + mesh->indexOffset)), mesh->vertexOffset);
+					glDrawElementsBaseVertex(GL_TRIANGLES, g->count, indexStoreType, (void*)((indexStoreType == GL_UNSIGNED_INT ? sizeof(int) : sizeof(short)) *g->ixFirst + mesh->indexOffset), mesh->vertexOffset);
 				else
-					glDrawElements(GL_TRIANGLES, g->count, GL_UNSIGNED_INT, (void*)(sizeof(uint32_t) * (g->ixFirst + mesh->indexOffset)));
+					glDrawElements(GL_TRIANGLES, g->count, indexStoreType, (void*)((indexStoreType == GL_UNSIGNED_INT ? sizeof(int) : sizeof(short)) * g->ixFirst + mesh->indexOffset));
 			}
 		}
 
@@ -1133,11 +1181,13 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	// Cleanup
 	//
 
-	const size_t meshCount = arrlen(meshes);
+	const size_t meshCount = arrlenu(meshes);
 	for (uint32_t i = 0; i < meshCount; i++) 
 		destroy_mesh(meshes + i);
 	arrfree(meshes);
 
+	glDeleteSamplers(1, &sampler);
+	glDeleteTextures(1, &atlas);
 	const GLuint buffersToDelete[] = { vbo, ebo, mtls, 
 		matrixUBO, cameraUBO, lightingUBO, defaultMaterialUBO };
 	glDeleteBuffers(_countof(buffersToDelete), buffersToDelete);

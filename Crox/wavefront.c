@@ -15,10 +15,9 @@
 #include <assert.h>
 
 #include "mesh.h"
-
-
 #include "wavefront.h"
 
+#pragma warning(disable : 4706) //assignments inside a conditional is widely used in this module. suppress it in WarningLevel4
 
 // A chunk represents indices used for crafting vertices. 
 struct IndexChunk
@@ -55,6 +54,14 @@ inline bool startsWith(_In_z_ const char* str, _In_z_ const char* pfx)
 inline void removeLineFeed(_In_z_ char* line)
 {
 	line[strcspn(line, "\r\n")] = '\0';
+}
+
+static char* copyStringHeapAlloc(_In_z_ const char* str)
+{
+	size_t len = strlen(str) + 1;
+	char* data = (char*)malloc(len*sizeof(char));
+	strcpy_s(data, len, str);
+	return data;
 }
 
 
@@ -275,7 +282,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 			activeGroup.ixFirst = (uint32_t)arrlenu(indices);
 
 			//If there's a name, remainder after trainling space is the name of the new group.
-			const char* name = it != NULL ? it : "noname";
+			const char* groupName = it != NULL ? it : "noname";
 			
 			size_t nameLen = strlen(it)+1;//name's length + nul terminator
 			activeGroup.name = _aligned_malloc(nameLen, 8);
@@ -285,7 +292,7 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 				continue;
 			}
 
-			CHECK((error = strcpy_s(activeGroup.name, nameLen, it)) == 0);
+			CHECK((error = strcpy_s(activeGroup.name, nameLen, groupName)) == 0);
 
 			break;
 		}
@@ -381,18 +388,21 @@ struct WavefrontObj wavefront_obj_read(_In_ FILE* file)
 }
 
 
-struct WavefrontMtllib wavefront_mtl_read(_In_ FILE* file)
+struct WavefrontMtllibKV* wavefront_mtl_read(_In_ FILE* file)
 {
 	// returns:
 	
 	struct WavefrontMtllibKV* materialsKV = NULL; // stb_ds string map
-	const char** keys = NULL;
+	sh_new_strdup(materialsKV);
+
 	// Utilities:
 
 	const int LINEBUF_SIZE = 512;
 	char* lineBuf = _aligned_malloc(sizeof * lineBuf * LINEBUF_SIZE, 8);
 
-	_Null_terminated_ char* name = NULL;// name of the material
+	uint32_t nameCapacity = 16; 
+	_Null_terminated_ char* name = calloc(nameCapacity, sizeof(char));// name of the material'
+
 	struct WavefrontMtl active;			// Active material to read
 	memset(&active, 0, sizeof active);
 
@@ -405,6 +415,7 @@ struct WavefrontMtllib wavefront_mtl_read(_In_ FILE* file)
 
 		if (line == NULL)
 		{
+
 			if (isEOF = feof(file))
 				break;
 			else if (isError = ferror(file))
@@ -505,26 +516,32 @@ struct WavefrontMtllib wavefront_mtl_read(_In_ FILE* file)
 			break;
 		}
 
-		case '#': // ignore comments
-		{
-			continue;
-		}
+		case '#': continue; // ignore comments
 		
 		default:
 			if (startsWith(line, "newmtl"))
 			{
-				if (name) 
+				if (strlen(name) != 0)
 				{
-
 					shput(materialsKV, name, active);
-					arrput(keys, name);
-
 					memset(&active, 0, sizeof active);
 				}
 
 				it = strchr(it, ' ') + 1;
-				size_t len = strlen(it)+1; //material name length including nul terminator
-				name = _aligned_malloc(len, 8);
+				size_t len = strlen(it) + 1; //material name length including nul terminator
+
+				if (len > nameCapacity)
+				{
+					nameCapacity = (uint32_t)len;
+					char* newName = realloc(name, len);
+					if (!newName)
+					{
+						isError = true;
+						continue;
+					}
+					name = newName;
+				}
+
 				CHECK((error = strcpy_s(name, len, it)) == 0);
 
 				break;
@@ -547,6 +564,24 @@ struct WavefrontMtllib wavefront_mtl_read(_In_ FILE* file)
 				break;
 			}
 
+			else if (startsWith(line, "map_Ka"))
+				active.ambientMapPath = copyStringHeapAlloc(strchr(line, ' ') + 1);
+
+			else if (startsWith(line, "map_Kd"))
+				active.diffuseMapPath = copyStringHeapAlloc(strchr(line, ' ') + 1);
+
+			else if (startsWith(line, "map_Ks"))
+				active.specularMapPath = copyStringHeapAlloc(strchr(line, ' ') + 1);
+
+			else if (startsWith(line, "map_d"))
+				active.alphaMapPath = copyStringHeapAlloc(strchr(line, ' ') + 1);
+
+			else if (startsWith(line, "map_Ns"))
+				active.shininessMapPath = copyStringHeapAlloc(strchr(line, ' ') + 1);
+
+			else if (startsWith(line, "map_Bump") || startsWith(line, "bump"))
+				active.bumpMapPath = copyStringHeapAlloc(strchr(line, ' ') + 1);
+
 			break;
 		}
 
@@ -554,9 +589,9 @@ struct WavefrontMtllib wavefront_mtl_read(_In_ FILE* file)
 	}
 
 	shput(materialsKV, name, active);
-	arrput(keys, name);
 
+	free(name);
 	_aligned_free(lineBuf);
 
-	return (struct WavefrontMtllib) { materialsKV, keys };
+	return materialsKV;
 }

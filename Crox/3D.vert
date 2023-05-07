@@ -15,17 +15,16 @@ layout (std140, binding = 0) uniform MatrixBlock
 
 layout (location = 0) out VData 
 {
-	vec3 pos;		// Vertex pos in world space
-	vec3 normal;	// Normal transformed into world space
-	vec2 tex;		// Texcoord 
-} 
-vout;
+	vec3 Pos;		// Vertex pos in world space
+	vec3 Normal;	// Normal transformed into world space
+	vec2 Tex0;		// Texcoord 
+} ;
 
 void main()
 {
 	gl_Position = u_matrix * vec4(aXYZ, 1.0);
 
-	vout.pos = vec3(u_model * vec4(aXYZ,1));
-	vout.normal = normalize( mat3(u_normal) * aIJK );
-	vout.tex = aUV;
+	Pos = vec3(u_model * vec4(aXYZ,1));
+	Normal = normalize( mat3(u_normal) * aIJK );
+	Tex0 = aUV;
 }

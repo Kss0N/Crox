@@ -14,7 +14,7 @@
 */
 FILE* log_setLog(_In_opt_ FILE* newFile);
 
-int log_logEntry(_In_ enum Severity severity, _Printf_format_string_ TCHAR* fmt, ...);
+int log_logEntry(_In_ int severity, _Printf_format_string_ TCHAR* fmt, ...);
 
 #define cxINFO(...)		log_logEntry(CXLOG_SEVERITY_INFO,  __VA_ARGS__)
 #define cxDEBUG(...)	log_logEntry(CXLOG_SEVERITY_DEBUG, __VA_ARGS__)

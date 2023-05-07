@@ -126,7 +126,7 @@ LINMATH_H_FUNC float* vec4_reflect	(_Out_writes_(4) vec4 r, _In_reads_(4) vec4 c
 	return r;
 }
 
-
+/*
 typedef vec3 mat3[3];
 
 LINMATH_H_FUNC vec3 * mat3_identity				(_Out_writes_(3) mat3 M)
@@ -342,7 +342,7 @@ LINMATH_H_FUNC vec3 * mat3_orthonormalize		(_Out_writes_(3) mat3 R, _In_reads_(3
 
 	return R;
 }
-
+*/
 
 ;
 typedef vec4 mat4x4[4];
@@ -445,7 +445,7 @@ LINMATH_H_FUNC vec4 * mat4x4_translate			(_Out_writes_(4) mat4 T, _In_ float x, 
 	T[3][2] = z;
 	return T;
 }
-LINMATH_H_FUNC vec4 * mat4x4_translate_in_place	(_Out_writes_(4) mat4 M, _In_ float x, _In_ float y, _In_ float z)
+LINMATH_H_FUNC vec4 * mat4x4_translate_in_place	(_Inout_updates_(4) mat4 M, _In_ float x, _In_ float y, _In_ float z)
 {
 	vec4 t = { x, y, z, 0 };
 	vec4 r;
