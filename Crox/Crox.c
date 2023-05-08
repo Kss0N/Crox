@@ -395,7 +395,10 @@ inline struct mesh* createMeshes(
 			ixMapAmbient,
 			ixMapDiffuse,
 			ixMapSpecular,
-			ixMapAlphaShininess; //Since the alpha map will only use the A channel, the Shinniness map could be appended ontop of it, using the R channel, thus saving space from reduncandies
+			ixMapNormal,
+			//ixMapAlphaShininess; //Since the alpha map will only use the A channel, the Shinniness map could be appended ontop of it, using the R channel, thus saving space from reduncandies
+			ixMapAlpha,
+			ixMapShininess;
 	};
 
 	uint32_t 
@@ -404,7 +407,7 @@ inline struct mesh* createMeshes(
 	struct Vertex	**verticesV = NULL;	// stb_ds Vector of vertex arrays
 	uint32_t		**indicesV  = NULL;	// stb_ds Vector of element arrays
 	struct Material	* materials = NULL;	// stb_ds Vector of material buffers
-	struct TexInfo	* maps		= NULL; // stb_ds Vector of material maps.
+	struct TexInfo	* infos		= NULL; // stb_ds Vector of material maps.
 	stbi_uc			**images	= NULL; // stb_ds Vector of map images
 
 	struct WavefrontObj obj;
@@ -478,115 +481,159 @@ inline struct mesh* createMeshes(
 			//
 			
 			const uint32_t ixMtl = (uint32_t)shgeti(mtllib, group->mtlName);
-			if (ixMtl != -1)
+			if (ixMtl == -1) 
+				goto SKIP_MATERIAL;
+			const struct WavefrontMtl* pM = &shgetp(mtllib, group->mtlName)->value;
+			cxINFO(_T("\tParsing Material \"%hs\"\n"), group->mtlName);
+
+			//NOTE: materials are specified per the uniform `MaterialBlock` in file `3D.frag`
+			//TODO: make this more "shader agnostic"
+
+			//TODO: merge alpha and shininess mapc
+			stbi_uc
+				* ambientMap		= NULL,
+				* diffuseMap		= NULL,
+				* specularMap		= NULL,
+				* normalMap			= NULL,
+				* alphaShininessMap = NULL, //TODO
+				* alphaMap			= NULL,
+				* shininessMap		= NULL;
+			struct TexInfo
+				ambientInfo			= { 0 },
+				diffuseInfo			= { 0 },
+				specularInfo		= { 0 },
+				normalInfo			= { 0 },
+				alphaShininessInfo	= { 0 }, //TODO
+				alphaInfo			= { 0 },
+				shininessInfo		= { 0 };
+
+
+			if (pM->ambientMapPath)
 			{
-				cxINFO(_T("\tParsing Material \"%hs\"\n"), group->mtlName);
-				const struct WavefrontMtl* pM = &shgetp(mtllib, group->mtlName)->value;
+				cwk_path_change_basename(path, pM->ambientMapPath, imagePath, MAX_PATH);
+				if (!parseMap(imagePath, &ambientMap, &ambientInfo))
+					goto CLEANUP_INVALID;
+			}
+			if (pM->diffuseMapPath)
+			{
+				cwk_path_change_basename(path, pM->diffuseMapPath, imagePath, MAX_PATH);
+				if (!parseMap(imagePath, &diffuseMap, &diffuseInfo))
+					goto CLEANUP_INVALID;
+			}
+			if (pM->specularMapPath)
+			{
+				cwk_path_change_basename(path, pM->specularMapPath, imagePath, MAX_PATH);
+				if (!parseMap(imagePath, &specularMap, &specularInfo))
+					goto CLEANUP_INVALID;
+			}
+			if (pM->bumpMapPath)
+			{
+				cwk_path_change_basename(path, pM->bumpMapPath, imagePath, MAX_PATH);
+				if (!parseMap(imagePath, &normalMap, &normalInfo))
+					goto CLEANUP_INVALID;
+			}
 
-				//NOTE: materials are specified per the uniform `MaterialBlock` in file `3D.frag`
-				//TODO: make this more "shader agnostic"
-
-				//TODO: merge alpha and shininess mapc
-				stbi_uc
-					* ambientMap		= NULL,
-					* diffuseMap		= NULL,
-					* specularMap		= NULL,
-					* normalMap			= NULL,
-					* alphaShininessMap = NULL, //TODO
-					* alphaMap			= NULL,
-					* shininessMap		= NULL;
-				struct TexInfo
-					ambientInfo			= { 0 },
-					diffuseInfo			= { 0 },
-					specularInfo		= { 0 },
-					normalInfo			= { 0 },
-					alphaShininessInfo	= { 0 }, //TODO
-					alphaInfo			= { 0 },
-					shininessInfo		= { 0 };
-
-
-				if (pM->ambientMapPath)
+			if (pM->alphaMapPath || pM->shininessMapPath)
+			{
+				if (pM->alphaMapPath)
 				{
-					cwk_path_change_basename(path, pM->ambientMapPath, imagePath, MAX_PATH);
-					if (!parseMap(imagePath, &ambientMap, &ambientInfo))
-						goto CLEANUP_INVALID;					
-				}
-				if (pM->diffuseMapPath)
-				{
-					cwk_path_change_basename(path, pM->diffuseMapPath, imagePath, MAX_PATH);
-					if (!parseMap(imagePath, &diffuseMap, &diffuseInfo))
+					cwk_path_change_basename(path, pM->alphaMapPath, imagePath, MAX_PATH);
+					if (!parseMap(imagePath, &alphaMap, &alphaInfo))
 						goto CLEANUP_INVALID;
 				}
-				if (pM->specularMapPath)
+				if (pM->shininessMapPath)
 				{
-					cwk_path_change_basename(path, pM->specularMapPath, imagePath, MAX_PATH);
-					if (!parseMap(imagePath, &specularMap, &specularInfo))
-						goto CLEANUP_INVALID;	
-				}
-				if (pM->bumpMapPath)
-				{
-					cwk_path_change_basename(path, pM->bumpMapPath, imagePath, MAX_PATH);
-					if (!parseMap(imagePath, &normalMap, &normalInfo))
-						goto CLEANUP_INVALID;	
+					cwk_path_change_basename(path, pM->shininessMapPath, imagePath, MAX_PATH);
+					struct TexInfo info;
+					stbi_uc* image;
+					if (!parseMap(imagePath, &shininessMap, &shininessInfo))
+						goto CLEANUP_INVALID;
 				}
 
-				if (pM->alphaMapPath || pM->shininessMapPath)
+				//alpha, but not shininess
+				if (alphaMap && !shininessMap)
 				{
-					if (pM->alphaMapPath)
-					{
-						cwk_path_change_basename(path, pM->alphaMapPath, imagePath, MAX_PATH);
-						if (!parseMap(imagePath, &alphaMap, &alphaInfo))
-							goto CLEANUP_INVALID;
-					}
-					if (pM->shininessMapPath)
-					{
-						cwk_path_change_basename(path, pM->shininessMapPath, imagePath, MAX_PATH);
-						struct TexInfo info;
-						stbi_uc* image;
-						if (!parseMap(imagePath, &shininessMap, &shininessInfo))
-							goto CLEANUP_INVALID;
-					}
-
-					//alpha, but not shininess
-					if (alphaMap && !shininessMap)
-					{
-						alphaShininessMap = alphaMap;
-						alphaShininessInfo = alphaInfo;
-						goto SKIP_MERGE;
-					}
-					
-					//shininess, but not alpha
-					if (shininessMap && !alphaMap)
-					{
-						alphaShininessMap = shininessMap;
-						alphaShininessInfo = shininessInfo;
-						goto SKIP_MERGE;
-					}
-
-					//
-					//alpha and shininess => merge both images into one.
-					//
-
-					//TODO: merge images
-
+					alphaShininessMap = alphaMap;
+					alphaShininessInfo = alphaInfo;
+					goto SKIP_MERGE;
 				}
-			SKIP_MERGE: 
 
-				//uint8_t* mtlBuf = (uint8_t*)_aligned_malloc(0x80, UBO_ALIGNMENT);
-				//if (!mtlBuf) continue; //then it will just use the default material.
+				//shininess, but not alpha
+				if (shininessMap && !alphaMap)
+				{
+					alphaShininessMap = shininessMap;
+					alphaShininessInfo = shininessInfo;
+					goto SKIP_MERGE;
+				}
 
+				//
+				//alpha and shininess => merge both images into one.
+				//
 
-				struct Material mat = {0};
-				vec3_dup(mat.ambient, pM->ambient);
-				vec3_dup(mat.diffuse, pM->diffuse);
-				vec3_dup(mat.specular, pM->specular);
-				mat.alpha = pM->alpha;
-				mat.shininess = pM->shininess;
+				//TODO: merge images
 
-				const uint32_t ixMaterial = mtlOffset + ixMtl;
-				materials[ixMaterial] = mat;
-				g.ixMaterial = ixMaterial;
+			SKIP_MERGE:
+				;
 			}
+
+			struct Material mat = { 0 };
+			vec3_dup(mat.ambient, pM->ambient);
+			vec3_dup(mat.diffuse, pM->diffuse);
+			vec3_dup(mat.specular,pM->specular);
+			mat.alpha = pM->alpha;
+			mat.shininess = pM->shininess;
+
+			mat.ixMapAmbient	= -1;
+			mat.ixMapDiffuse	= -1;
+			mat.ixMapSpecular	= -1;
+			mat.ixMapNormal		= -1;
+			mat.ixMapAlpha		= -1;
+			mat.ixMapShininess	= -1;
+
+			if (ambientMap) 
+			{
+				mat.ixMapAmbient = arrlen(images);
+				arrput(images, ambientMap);
+				arrput(infos, ambientInfo);
+			}
+			if (diffuseMap)
+			{
+				mat.ixMapDiffuse = arrlen(images);
+				arrput(images, diffuseMap);
+				arrput(infos, diffuseInfo);
+			}
+			if (specularMap)
+			{
+				mat.ixMapSpecular = arrlen(images);
+				arrput(images, specularMap);
+				arrput(infos, specularInfo);
+			}
+			if (normalMap)
+			{
+				mat.ixMapNormal = arrlen(images);
+				arrput(images, normalMap);
+				arrput(infos, normalInfo);
+			}
+			if (alphaMap)
+			{
+				mat.ixMapAlpha = arrlen(images);
+				arrput(images, alphaMap);
+				arrput(infos, alphaInfo);
+			}
+			if (shininessMap)
+			{
+				mat.ixMapShininess = arrlen(images);
+				arrput(images, shininessMap);
+				arrput(infos, shininessInfo);
+			}
+
+			const uint32_t ixMaterial = mtlOffset + ixMtl;
+			materials[ixMaterial] = mat;
+			g.ixMaterial = ixMaterial;
+
+		SKIP_MATERIAL:
+
+
 			arrput(active->groups, g);
 		}
 		
@@ -673,6 +720,9 @@ CLEANUP:
 	}
 	arrfree(verticesV);
 	arrfree( indicesV);
+	arrfree(materials);
+	arrfree(images);
+	arrfree(infos);
 
 	_aligned_free(mtllibPath);
 	_aligned_free(imagePath);
