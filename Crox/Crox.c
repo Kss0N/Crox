@@ -251,17 +251,24 @@ CLEANUP_SOURCE:
 
 
 struct TexInfo {
-	uint16_t
+	float
 		xOffset, yOffset,
 		width, height;
 };
+_Static_assert(sizeof(struct TexInfo) == sizeof(vec4), "make sure that texinfo and vec4 are the same type as the texInfo will be 'translated' into vec4 when being transfered from cpu to gpu \n");
 
 static void uploadToMaterialBuffer(uint8_t* buf, 
-	vec3 kAmbient, 
-	vec3 kDiffuse, 
-	vec3 kSpecular, 
-	float nAlpha, 
-	float nShininess)
+	_In_ vec3 kAmbient, 
+	_In_ vec3 kDiffuse, 
+	_In_ vec3 kSpecular, 
+	_In_ float nAlpha, 
+	_In_ float nShininess,
+	_In_opt_ struct TexInfo* mAmbient,
+	_In_opt_ struct TexInfo* mDiffuse,
+	_In_opt_ struct TexInfo* mSpecular,
+	_In_opt_ struct TexInfo* mNormal,
+	_In_opt_ struct TexInfo* mAlpha,
+	_In_opt_ struct TexInfo* mShininess)
 {
 	size_t offset = 0;
 
@@ -284,7 +291,51 @@ static void uploadToMaterialBuffer(uint8_t* buf,
 	//u_specularColor
 	memcpy(buf + offset, kSpecular, sizeof(vec3));
 	offset += sizeof(vec3);
-	
+
+	//unused
+	offset += sizeof(float);
+
+	//ambient map
+	if (mAmbient)
+		memcpy(buf + offset, mAmbient, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);
+
+	//diffuse map
+	if (mDiffuse)
+		memcpy(buf + offset, mDiffuse, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);
+
+	//specular map
+	if (mSpecular)
+		memcpy(buf + offset, mSpecular, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);
+
+	//normal map
+	if (mNormal)
+		memcpy(buf + offset, mNormal, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);
+
+	//alpha map
+	if (mAlpha)
+		memcpy(buf + offset, mAlpha, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);
+
+	//shininess map
+	if (mShininess)
+		memcpy(buf + offset, mShininess, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);	
 }
 
 static bool parseMap(_In_ const char* path, _Out_ stbi_uc** pImage, _Out_ struct TexInfo* pInfo)
@@ -295,6 +346,8 @@ static bool parseMap(_In_ const char* path, _Out_ stbi_uc** pImage, _Out_ struct
 	stbi_uc* img = stbi_load(path, &width, &height, &eChannelLayout, STBI_rgb_alpha);
 	if (img)
 	{
+		info.width = (float)width;
+		info.height = (float)height;
 		*pImage = img;
 		*pInfo = info;
 		return true;
@@ -312,7 +365,10 @@ static size_t indicesByteSize(size_t vertexCount, size_t indexCount)
 		: indexCount * sizeof(uint32_t)
 		;
 }
-
+static uint32_t ceilTo(uint32_t x, uint32_t to)
+{
+	return to * (uint32_t)(x / to) + to;
+}
 
 
 struct group {
@@ -320,7 +376,7 @@ struct group {
 		ixFirst,
 		count;
 
-	int32_t ixMaterial;
+	 int32_t ixMaterial;
 	uint32_t materialSize;
 };
 
@@ -373,7 +429,8 @@ inline struct mesh* createMeshes(
 	_Inout_				GLuint		atlas)
 {
 	// Returns
-	struct mesh* meshes = NULL;
+	struct mesh* meshes = malloc(count * sizeof(struct mesh));
+	if (!meshes) return NULL;
 
 	//
 	// Utilities
@@ -381,13 +438,23 @@ inline struct mesh* createMeshes(
 
 	struct Material 
 	{
-		void* buffer;
+		vec3
+			ambient,
+			diffuse,
+			specular;
+		float
+			alpha,
+			shininess;
+
 		// -1 means that the material does not use a map for that property
 		int32_t
 			ixMapAmbient,
 			ixMapDiffuse,
 			ixMapSpecular,
-			ixMapAlphaShininess; //Since the alpha map will only use the A channel, the Shinniness map could be appended ontop of it, using the R channel, thus saving space from reduncandies
+			ixMapNormal,
+			//ixMapAlphaShininess; //Since the alpha map will only use the A channel, the Shinniness map could be appended ontop of it, using the R channel, thus saving space from reduncandies
+			ixMapAlpha,
+			ixMapShininess;
 	};
 
 	uint32_t 
@@ -396,7 +463,7 @@ inline struct mesh* createMeshes(
 	struct Vertex	**verticesV = NULL;	// stb_ds Vector of vertex arrays
 	uint32_t		**indicesV  = NULL;	// stb_ds Vector of element arrays
 	struct Material	* materials = NULL;	// stb_ds Vector of material buffers
-	struct TexInfo	* maps		= NULL; // stb_ds Vector of material maps.
+	struct TexInfo	* infos		= NULL; // stb_ds Vector of material maps.
 	stbi_uc			**images	= NULL; // stb_ds Vector of map images
 
 	struct WavefrontObj obj;
@@ -408,7 +475,8 @@ inline struct mesh* createMeshes(
 
 	const int32_t UBO_ALIGNMENT = getDriverConstant(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT);
 
-	struct mesh active;
+	stbi_set_flip_vertically_on_load(true);
+	
 	Path path;
 	for (uint32_t ix = 0;
 		ix < count;
@@ -418,8 +486,8 @@ inline struct mesh* createMeshes(
 		FILE* file;
 		errno_t err;  
 
-		active.groups = NULL;
-		active.name = NULL;
+		struct mesh* active = meshes + ix;
+		memset(active, 0, sizeof(struct mesh));
 		
 		err = fopen_s(&file, path, "r");
 		if (err != 0)
@@ -441,11 +509,11 @@ inline struct mesh* createMeshes(
 		if (obj.name)
 		{
 			//Let's be a bit clever and just transfer ownership.
-			active.name = obj.name;
+			active->name = obj.name;
 			obj.name = NULL;
 		}
 		
-		cxINFO(_T("Creating mesh \"%hs\".\n"), active.name ? active.name : "NONAME");
+		cxINFO(_T("Creating mesh \"%hs\".\n"), active->name ? active->name : "NONAME");
 
 		const uint32_t 
 			mtlCount  = mtllib ? (uint32_t)shlenu(mtllib) : 0,
@@ -470,132 +538,169 @@ inline struct mesh* createMeshes(
 			//
 			
 			const uint32_t ixMtl = (uint32_t)shgeti(mtllib, group->mtlName);
-			if (ixMtl != -1)
+			if (ixMtl == -1) 
+				goto SKIP_MATERIAL;
+			const struct WavefrontMtl* pM = &shgetp(mtllib, group->mtlName)->value;
+			cxINFO(_T("\tParsing Material \"%hs\"\n"), group->mtlName);
+
+			//NOTE: materials are specified per the uniform `MaterialBlock` in file `3D.frag`
+			//TODO: make this more "shader agnostic"
+
+			//TODO: merge alpha and shininess mapc
+			stbi_uc
+				* ambientMap		= NULL,
+				* diffuseMap		= NULL,
+				* specularMap		= NULL,
+				* normalMap			= NULL,
+				* alphaShininessMap = NULL, //TODO
+				* alphaMap			= NULL,
+				* shininessMap		= NULL;
+			struct TexInfo
+				ambientInfo			= { 0 },
+				diffuseInfo			= { 0 },
+				specularInfo		= { 0 },
+				normalInfo			= { 0 },
+				alphaShininessInfo	= { 0 }, //TODO
+				alphaInfo			= { 0 },
+				shininessInfo		= { 0 };
+
+
+			if (pM->ambientMapPath)
 			{
-				cxINFO(_T("\tParsing Material \"%hs\"\n"), group->mtlName);
-				const struct WavefrontMtl* pM = &shgetp(mtllib, group->mtlName)->value;
+				cwk_path_change_basename(path, pM->ambientMapPath, imagePath, MAX_PATH);
+				if (!parseMap(imagePath, &ambientMap, &ambientInfo))
+					goto CLEANUP_INVALID;
+			}
+			if (pM->diffuseMapPath)
+			{
+				cwk_path_change_basename(path, pM->diffuseMapPath, imagePath, MAX_PATH);
+				if (!parseMap(imagePath, &diffuseMap, &diffuseInfo))
+					goto CLEANUP_INVALID;
+			}
+			if (pM->specularMapPath)
+			{
+				cwk_path_change_basename(path, pM->specularMapPath, imagePath, MAX_PATH);
+				if (!parseMap(imagePath, &specularMap, &specularInfo))
+					goto CLEANUP_INVALID;
+			}
+			if (pM->bumpMapPath)
+			{
+				cwk_path_change_basename(path, pM->bumpMapPath, imagePath, MAX_PATH);
+				if (!parseMap(imagePath, &normalMap, &normalInfo))
+					goto CLEANUP_INVALID;
+			}
 
-				//NOTE: materials are specified per the uniform `MaterialBlock` in file `3D.frag`
-				//TODO: make this more "shader agnostic"
-
-				//TODO: merge alpha and shininess mapc
-				stbi_uc
-					* ambientMap		= NULL,
-					* diffuseMap		= NULL,
-					* specularMap		= NULL,
-					* normalMap			= NULL,
-					* alphaShininessMap = NULL, //TODO
-					* alphaMap			= NULL,
-					* shininessMap		= NULL;
-				struct TexInfo
-					ambientInfo			= { 0 },
-					diffuseInfo			= { 0 },
-					specularInfo		= { 0 },
-					normalInfo			= { 0 },
-					alphaShininessInfo	= { 0 }, //TODO
-					alphaInfo			= { 0 },
-					shininessInfo		= { 0 };
-
-
-				if (pM->ambientMapPath)
+			if (pM->alphaMapPath || pM->shininessMapPath)
+			{
+				if (pM->alphaMapPath)
 				{
-					cwk_path_change_basename(path, pM->ambientMapPath, imagePath, MAX_PATH);
-					if (!parseMap(imagePath, &ambientMap, &ambientInfo))
-						goto CLEANUP_INVALID;					
-				}
-				if (pM->diffuseMapPath)
-				{
-					cwk_path_change_basename(path, pM->diffuseMapPath, imagePath, MAX_PATH);
-					if (!parseMap(imagePath, &diffuseMap, &diffuseInfo))
+					cwk_path_change_basename(path, pM->alphaMapPath, imagePath, MAX_PATH);
+					if (!parseMap(imagePath, &alphaMap, &alphaInfo))
 						goto CLEANUP_INVALID;
 				}
-				if (pM->specularMapPath)
+				if (pM->shininessMapPath)
 				{
-					cwk_path_change_basename(path, pM->specularMapPath, imagePath, MAX_PATH);
-					if (!parseMap(imagePath, &specularMap, &specularInfo))
-						goto CLEANUP_INVALID;	
-				}
-				if (pM->bumpMapPath)
-				{
-					cwk_path_change_basename(path, pM->bumpMapPath, imagePath, MAX_PATH);
-					if (!parseMap(imagePath, &normalMap, &normalInfo))
-						goto CLEANUP_INVALID;	
+					cwk_path_change_basename(path, pM->shininessMapPath, imagePath, MAX_PATH);
+					struct TexInfo info;
+					stbi_uc* image;
+					if (!parseMap(imagePath, &shininessMap, &shininessInfo))
+						goto CLEANUP_INVALID;
 				}
 
-				if (pM->alphaMapPath || pM->shininessMapPath)
+				//alpha, but not shininess
+				if (alphaMap && !shininessMap)
 				{
-					if (pM->alphaMapPath)
-					{
-						cwk_path_change_basename(path, pM->alphaMapPath, imagePath, MAX_PATH);
-						if (!parseMap(imagePath, &alphaMap, &alphaInfo))
-							goto CLEANUP_INVALID;
-					}
-					if (pM->shininessMapPath)
-					{
-						cwk_path_change_basename(path, pM->shininessMapPath, imagePath, MAX_PATH);
-						struct TexInfo info;
-						stbi_uc* image;
-						if (!parseMap(imagePath, &shininessMap, &shininessInfo))
-							goto CLEANUP_INVALID;
-					}
-
-					//alpha, but not shininess
-					if (alphaMap && !shininessMap)
-					{
-						alphaShininessMap = alphaMap;
-						alphaShininessInfo = alphaInfo;
-						goto SKIP_MERGE;
-					}
-					
-					//shininess, but not alpha
-					if (shininessMap && !alphaMap)
-					{
-						alphaShininessMap = shininessMap;
-						alphaShininessInfo = shininessInfo;
-						goto SKIP_MERGE;
-					}
-
-					//
-					//alpha and shininess => merge both images into one.
-					//
-
-					//TODO: merge images
-
+					alphaShininessMap = alphaMap;
+					alphaShininessInfo = alphaInfo;
+					goto SKIP_MERGE;
 				}
-			SKIP_MERGE: 
 
-				uint8_t* mtlBuf = (uint8_t*)_aligned_malloc(0x80, UBO_ALIGNMENT);
-				if (!mtlBuf) continue; //then it will just use the default material.
+				//shininess, but not alpha
+				if (shininessMap && !alphaMap)
+				{
+					alphaShininessMap = shininessMap;
+					alphaShininessInfo = shininessInfo;
+					goto SKIP_MERGE;
+				}
 
+				//
+				//alpha and shininess => merge both images into one.
+				//
 
-				struct Material mat = {
-					.buffer = mtlBuf,
-				};
+				//TODO: merge images
 
-				
-				
-
-
-				
-				
-
-				
-				uploadToMaterialBuffer(mtlBuf, pM->ambient, pM->diffuse, pM->specular, pM->alpha, pM->shininess);
-
-				const uint32_t ixMaterial = mtlOffset + ixMtl;
-				materials[ixMaterial].buffer = (void*)mtlBuf;
-				g.ixMaterial = ixMaterial;
+			SKIP_MERGE:
+				;
 			}
-			arrput(active.groups, g);
+
+			struct Material mat = { 0 };
+			vec3_dup(mat.ambient, pM->ambient);
+			vec3_dup(mat.diffuse, pM->diffuse);
+			vec3_dup(mat.specular,pM->specular);
+			mat.alpha = pM->alpha;
+			mat.shininess = pM->shininess;
+
+			mat.ixMapAmbient	= -1;
+			mat.ixMapDiffuse	= -1;
+			mat.ixMapSpecular	= -1;
+			mat.ixMapNormal		= -1;
+			mat.ixMapAlpha		= -1;
+			mat.ixMapShininess	= -1;
+
+			if (ambientMap) 
+			{
+				mat.ixMapAmbient = arrlen(images);
+				arrput(images, ambientMap);
+				arrput(infos, ambientInfo);
+			}
+			if (diffuseMap)
+			{
+				mat.ixMapDiffuse = arrlen(images);
+				arrput(images, diffuseMap);
+				arrput(infos, diffuseInfo);
+			}
+			if (specularMap)
+			{
+				mat.ixMapSpecular = arrlen(images);
+				arrput(images, specularMap);
+				arrput(infos, specularInfo);
+			}
+			if (normalMap)
+			{
+				mat.ixMapNormal = arrlen(images);
+				arrput(images, normalMap);
+				arrput(infos, normalInfo);
+			}
+			if (alphaMap)
+			{
+				mat.ixMapAlpha = arrlen(images);
+				arrput(images, alphaMap);
+				arrput(infos, alphaInfo);
+			}
+			if (shininessMap)
+			{
+				mat.ixMapShininess = arrlen(images);
+				arrput(images, shininessMap);
+				arrput(infos, shininessInfo);
+			}
+
+			const uint32_t ixMaterial = mtlOffset + ixMtl;
+			materials[ixMaterial] = mat;
+			g.ixMaterial = ixMaterial;
+
+		SKIP_MATERIAL:
+
+
+			arrput(active->groups, g);
 		}
 		
-		active.vertexCount = (uint32_t)arrlen(obj.vertices);
-		active.vertexOffset = vertexCount;
-		active.indexOffset = indexSize;
+		active->vertexCount  = (uint32_t)arrlen(obj.vertices);
+		active->vertexOffset = vertexCount;
+		active-> indexOffset = indexSize;
 
 		vertexCount += (uint32_t)arrlen(obj.vertices);
 		
-		indexSize += indicesByteSize(active.vertexCount, arrlenu(obj.indices));
+		indexSize += indicesByteSize(active->vertexCount, arrlenu(obj.indices));
 
 		//transfer ownership from obj to verticesV and indicesV
 		arrput(verticesV, obj.vertices);
@@ -603,11 +708,36 @@ inline struct mesh* createMeshes(
 		obj.vertices = NULL;
 		obj. indices = NULL;
 
-		//finalize and append mesh
-		arrput(meshes, active);
+		//finalize mesh
+		//TODO
 	}
 
-	//Now let's upload the vertices, indices  and materials to the VBO, EBO and UBO.
+	//
+	// Create Atlas: (prototype) 
+	//
+
+	//NOTE: the images will just be stacked in X direction.
+
+	size_t
+		atlasWidth = 0,
+		atlasHeight = 0;
+	const uint32_t ATLAS_PIXEL_ALIGNMENT = 128;
+
+	const size_t mapCount = arrlenu(images);
+	for (uint32_t i = 0; i < mapCount; i++)
+	{
+		struct TexInfo* mapInfo = infos + i;
+
+		mapInfo->xOffset = (float)atlasWidth;
+		mapInfo->yOffset = 0; //TODO
+
+		atlasWidth += ceilTo(mapInfo->width, ATLAS_PIXEL_ALIGNMENT);
+		atlasHeight = max(atlasHeight, ceilTo(mapInfo->height, ATLAS_PIXEL_ALIGNMENT));
+	}
+
+
+
+	//Now let's upload the vertices, indices, materials and images to the VBO, EBO, UBO & Atlas.
 
 	const size_t
 		vertexDataSize = vertexCount * sizeof(struct Vertex),
@@ -616,12 +746,11 @@ inline struct mesh* createMeshes(
 	glNamedBufferData(vbo, vertexDataSize,	NULL, GL_STATIC_DRAW);
 	glNamedBufferData(ebo,      indexSize,	NULL, GL_STATIC_DRAW);
 	glNamedBufferData(ubo,   materialSize,	NULL, GL_STATIC_DRAW);
+	glTextureStorage2D(atlas, 1, GL_RGBA8, atlasWidth, atlasHeight);
 
 
-	size_t 
-		vertexOffset = 0;
+
 	uint8_t* pIndices = glMapNamedBuffer(ebo, GL_WRITE_ONLY);
-
 	for (uint32_t ix = 0; ix < count; ix++)
 	{
 		struct mesh* m = meshes + ix;
@@ -640,28 +769,49 @@ inline struct mesh* createMeshes(
 			((uint16_t*)pIndices)[i] = (uint16_t)(indicesV[ix][i]);
 
 		pIndices += indicesDataSize;
-		vertexOffset += arrlen(verticesV[ix]);
 	}
 	bool notCorrupted = glUnmapNamedBuffer(ebo);
 	assert(notCorrupted);
 
-	assert(vertexOffset == vertexCount);
-
-	size_t 
-		mtlOffset = 0;
-	for (uint32_t i = 0; i < arrlenu(materials); i++)
+	for (uint32_t i = 0; i < mapCount; i++)
 	{
-		glNamedBufferSubData(ubo, i * UBO_ALIGNMENT, UBO_ALIGNMENT, materials[i].buffer);
+		struct TexInfo* info = infos + i;
+		const stbi_uc* image = images[i];
+
+		glTextureSubImage2D(atlas, 0, info->xOffset, info->yOffset, info->width, info->height, GL_RGBA, GL_UNSIGNED_BYTE, image);
+
+		//change width and height into texCoord scale factor
+
+		info->width		/= atlasWidth;
+		info->height	/= atlasHeight;
+		info->xOffset	/= atlasWidth;
+		info->yOffset	/= atlasHeight;
 	}
+
+	const size_t materialCount = arrlenu(materials);
+	uint8_t* pMaterial = glMapNamedBuffer(ubo, GL_WRITE_ONLY);
+	for (uint32_t i = 0; i < materialCount; i++) 
+	{
+		const struct Material* m = materials + i;
+
+		uploadToMaterialBuffer(pMaterial, m->ambient, m->diffuse, m->specular, m->alpha, m->shininess,
+			m->ixMapAmbient == -1 ? NULL : infos + m->ixMapAmbient,
+			m->ixMapDiffuse == -1 ? NULL : infos + m->ixMapDiffuse,
+			m->ixMapSpecular== -1 ? NULL : infos + m->ixMapSpecular,
+			m->ixMapNormal  == -1 ? NULL : infos + m->ixMapNormal,
+			m->ixMapAlpha	== -1 ? NULL : infos + m->ixMapAlpha,
+			m->ixMapShininess==-1 ? NULL : infos + m->ixMapShininess
+		);
+
+		pMaterial += UBO_ALIGNMENT;
+	}
+	notCorrupted = glUnmapNamedBuffer(ubo);
+	assert(notCorrupted);
 
 CLEANUP:
 	for (uint32_t i = 0; i < arrlenu(images); i++)
 	{
 		stbi_image_free(images[i]);
-	}
-	for (uint32_t i = 0; i < arrlenu(materials); i++)
-	{
-		_aligned_free(materials[i].buffer);
 	}
 	for (uint32_t i = 0; i < arrlenu(verticesV); i++)
 	{
@@ -670,6 +820,9 @@ CLEANUP:
 	}
 	arrfree(verticesV);
 	arrfree( indicesV);
+	arrfree(materials);
+	arrfree(images);
+	arrfree(infos);
 
 	_aligned_free(mtllibPath);
 	_aligned_free(imagePath);
@@ -681,11 +834,11 @@ CLEANUP_INVALID: {
 
 		wfDestroyObj(&obj);
 		wfDestroyMtllib(&mtllib);
-		destroy_mesh(&active);
 
 		for (uint32_t i = 0; i < arrlen(meshes); i++)
 			destroy_mesh(meshes + i);
-		arrfree(meshes);
+		free(meshes);
+		meshes = NULL;
 		goto CLEANUP;
 	}
 }
@@ -780,7 +933,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 
 			   lightingUBO = createUBO(2 * sizeof(vec4), GL_DYNAMIC_DRAW),
 
-		defaultMaterialUBO = createUBO(4 * sizeof(vec4),  GL_STATIC_DRAW);
+		defaultMaterialUBO = createUBO(9 * sizeof(vec4),  GL_STATIC_DRAW);
 	
 	if			(matrixUBO)	NAME_OBJECT(GL_BUFFER,			matrixUBO,					 "<Matrix Uniform Buffer>");
 	if			(cameraUBO)	NAME_OBJECT(GL_BUFFER,			cameraUBO,			"<Camera Position Uniform Buffer>");
@@ -813,7 +966,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 
 	uint8_t* block = glMapNamedBuffer(defaultMaterialUBO, GL_WRITE_ONLY);
 	{
-		uploadToMaterialBuffer(block, DEFAULT_AMBIENT, DEFAULT_DIFFUSE, DEFAULT_SPECULAR, DEFAULT_ALPHA, DEFAULT_SHININESS);
+		uploadToMaterialBuffer(block, DEFAULT_AMBIENT, DEFAULT_DIFFUSE, DEFAULT_SPECULAR, DEFAULT_ALPHA, DEFAULT_SHININESS, NULL, NULL, NULL, NULL, NULL, NULL);
 	}
 	const GLboolean notCorrupted = glUnmapNamedBuffer(defaultMaterialUBO);
 	assert(notCorrupted); //TODO
@@ -851,8 +1004,8 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 		"../../../rsc/mesh/teapot.obj",
 		"../../../rsc/mesh/sphere.obj"
 	};
-
-	struct mesh* meshes = createMeshes(_countof(paths), paths, vbo, ebo, mtls, atlas);
+	const uint32_t meshCount = _countof(paths);
+	struct mesh* meshes = createMeshes(meshCount, paths, vbo, ebo, mtls, atlas);
 	assert(meshes != NULL);
 	
 	mat4 tmp;
@@ -898,7 +1051,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	glVertexArrayAttribFormat (vao, 2, COMPONENTS(vec2), GL_FLOAT, false, offsetof(struct Vertex, texcoord0));
 	glEnableVertexArrayAttrib (vao, 2);
 
-	for (uint32_t ix = 0; ix < arrlen(meshes); ix++)
+	for (uint32_t ix = 0; ix < meshCount; ix++)
 	{
 		struct mesh* m = &meshes[ix];
 		m->program = program;
@@ -918,6 +1071,9 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	glSamplerParameteri (sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	GLfloat samplerBorderColor[4] = {0, 0, .2f, 1.0f};
 	glSamplerParameterfv(sampler, GL_TEXTURE_BORDER_COLOR, samplerBorderColor);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, atlas);
 
 	//
 	// Render loop variables
@@ -1050,7 +1206,6 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 		
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		const size_t meshCount = arrlenu(meshes);
 		for (uint32_t ixMesh = 0; ixMesh < meshCount; ixMesh++)
 		{
 			const struct mesh* mesh = meshes + ixMesh;
@@ -1181,10 +1336,9 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	// Cleanup
 	//
 
-	const size_t meshCount = arrlenu(meshes);
 	for (uint32_t i = 0; i < meshCount; i++) 
 		destroy_mesh(meshes + i);
-	arrfree(meshes);
+	free(meshes);
 
 	glDeleteSamplers(1, &sampler);
 	glDeleteTextures(1, &atlas);

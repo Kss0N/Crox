@@ -38,12 +38,25 @@ layout (std140, binding = 3) uniform MaterialBlock
 		u_ambientMapLoc,
 	    u_diffuseMapLoc,
 	   u_specularMapLoc,
+	     u_normalMapLoc,
 	      u_alphaMapLoc,
 	  u_shininessMapLoc;
 };
 
 layout(binding = 0) uniform sampler2D atlas;
 
+
+vec4 getColor(vec4 mapInfo, vec4 defColor)
+{
+	// (width, height) == (0,0) means there's no texture
+	if(mapInfo[2] == 0.0) return defColor;
+
+	return texture(atlas, mapInfo.xy + mapInfo.zw * Tex0.xy);
+}
+float getAlpha(vec4 mapInfo, float def)
+{
+	return (mapInfo[2] == 0.0) ? def : 1 - texture(atlas, mapInfo.xy + mapInfo.zw * Tex0.xy).x;
+}
  
 void main()
 {
@@ -51,12 +64,12 @@ void main()
 	// may be sampled from atlas or from material block:
 	
 	vec3 
-		ambientColor = u_ambientColor,
-		diffuseColor = u_diffuseColor,
-	   specularColor = u_specularColor,
+		ambientColor = getColor( u_ambientMapLoc, vec4( u_ambientColor, 0)).xyz,
+		diffuseColor = getColor( u_diffuseMapLoc, vec4( u_diffuseColor, 0)).xyz,
+	   specularColor = getColor(u_specularMapLoc, vec4(u_specularColor, 0)).xyz,
 	          normal = Normal;
 	float 
-		       alpha = u_alpha,
+		       alpha = getAlpha(u_alphaMapLoc, u_alpha),
 		   shininess = u_shininess;
 
 	// blinn-phong shading:
@@ -72,9 +85,9 @@ void main()
 		spec = pow(max(dot(halfDir, reflDir), 0.0), shininess);
 
 	vec3 
-		ambient = u_ambientColor * 0.3,
-		diffuse = u_diffuseColor * diff,
-		specular= u_specularColor*(diff == 0 ? 0.0 : spec);
+		ambient = ambientColor * 0.3,
+		diffuse = diffuseColor * diff,
+		specular= specularColor*(diff == 0 ? 0.0 : spec);
 
 	vec3 color = (ambient + diffuse + specular) * u_lightColor;
 	fragColor = vec4(color, alpha);
