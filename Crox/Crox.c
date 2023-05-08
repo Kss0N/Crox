@@ -382,7 +382,14 @@ inline struct mesh* createMeshes(
 
 	struct Material 
 	{
-		void* buffer;
+		vec3
+			ambient,
+			diffuse,
+			specular;
+		float
+			alpha,
+			shininess;
+
 		// -1 means that the material does not use a map for that property
 		int32_t
 			ixMapAmbient,
@@ -565,26 +572,19 @@ inline struct mesh* createMeshes(
 				}
 			SKIP_MERGE: 
 
-				uint8_t* mtlBuf = (uint8_t*)_aligned_malloc(0x80, UBO_ALIGNMENT);
-				if (!mtlBuf) continue; //then it will just use the default material.
+				//uint8_t* mtlBuf = (uint8_t*)_aligned_malloc(0x80, UBO_ALIGNMENT);
+				//if (!mtlBuf) continue; //then it will just use the default material.
 
 
-				struct Material mat = {
-					.buffer = mtlBuf,
-				};
-
-				
-				
-
-
-				
-				
-
-				
-				uploadToMaterialBuffer(mtlBuf, pM->ambient, pM->diffuse, pM->specular, pM->alpha, pM->shininess);
+				struct Material mat = {0};
+				vec3_dup(mat.ambient, pM->ambient);
+				vec3_dup(mat.diffuse, pM->diffuse);
+				vec3_dup(mat.specular, pM->specular);
+				mat.alpha = pM->alpha;
+				mat.shininess = pM->shininess;
 
 				const uint32_t ixMaterial = mtlOffset + ixMtl;
-				materials[ixMaterial].buffer = (void*)mtlBuf;
+				materials[ixMaterial] = mat;
 				g.ixMaterial = ixMaterial;
 			}
 			arrput(active->groups, g);
@@ -654,7 +654,7 @@ inline struct mesh* createMeshes(
 	{
 		const struct Material* m = materials + i;
 
-		memcpy(pMaterial, m->buffer, UBO_ALIGNMENT);
+		uploadToMaterialBuffer(pMaterial, m->ambient, m->diffuse, m->specular, m->alpha, m->shininess);
 
 		pMaterial += UBO_ALIGNMENT;
 	}
@@ -665,10 +665,6 @@ CLEANUP:
 	for (uint32_t i = 0; i < arrlenu(images); i++)
 	{
 		stbi_image_free(images[i]);
-	}
-	for (uint32_t i = 0; i < arrlenu(materials); i++)
-	{
-		_aligned_free(materials[i].buffer);
 	}
 	for (uint32_t i = 0; i < arrlenu(verticesV); i++)
 	{
