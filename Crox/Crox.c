@@ -373,7 +373,8 @@ inline struct mesh* createMeshes(
 	_Inout_				GLuint		atlas)
 {
 	// Returns
-	struct mesh* meshes = NULL;
+	struct mesh* meshes = malloc(count * sizeof(struct mesh));
+	if (!meshes) return NULL;
 
 	//
 	// Utilities
@@ -408,7 +409,7 @@ inline struct mesh* createMeshes(
 
 	const int32_t UBO_ALIGNMENT = getDriverConstant(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT);
 
-	struct mesh active;
+	
 	Path path;
 	for (uint32_t ix = 0;
 		ix < count;
@@ -418,8 +419,8 @@ inline struct mesh* createMeshes(
 		FILE* file;
 		errno_t err;  
 
-		active.groups = NULL;
-		active.name = NULL;
+		struct mesh* active = meshes + ix;
+		memset(active, 0, sizeof(struct mesh));
 		
 		err = fopen_s(&file, path, "r");
 		if (err != 0)
@@ -441,11 +442,11 @@ inline struct mesh* createMeshes(
 		if (obj.name)
 		{
 			//Let's be a bit clever and just transfer ownership.
-			active.name = obj.name;
+			active->name = obj.name;
 			obj.name = NULL;
 		}
 		
-		cxINFO(_T("Creating mesh \"%hs\".\n"), active.name ? active.name : "NONAME");
+		cxINFO(_T("Creating mesh \"%hs\".\n"), active->name ? active->name : "NONAME");
 
 		const uint32_t 
 			mtlCount  = mtllib ? (uint32_t)shlenu(mtllib) : 0,
@@ -586,16 +587,16 @@ inline struct mesh* createMeshes(
 				materials[ixMaterial].buffer = (void*)mtlBuf;
 				g.ixMaterial = ixMaterial;
 			}
-			arrput(active.groups, g);
+			arrput(active->groups, g);
 		}
 		
-		active.vertexCount = (uint32_t)arrlen(obj.vertices);
-		active.vertexOffset = vertexCount;
-		active.indexOffset = indexSize;
+		active->vertexCount = (uint32_t)arrlen(obj.vertices);
+		active->vertexOffset = vertexCount;
+		active->indexOffset = indexSize;
 
 		vertexCount += (uint32_t)arrlen(obj.vertices);
 		
-		indexSize += indicesByteSize(active.vertexCount, arrlenu(obj.indices));
+		indexSize += indicesByteSize(active->vertexCount, arrlenu(obj.indices));
 
 		//transfer ownership from obj to verticesV and indicesV
 		arrput(verticesV, obj.vertices);
@@ -603,8 +604,8 @@ inline struct mesh* createMeshes(
 		obj.vertices = NULL;
 		obj. indices = NULL;
 
-		//finalize and append mesh
-		arrput(meshes, active);
+		//finalize mesh
+		//TODO
 	}
 
 	//Now let's upload the vertices, indices  and materials to the VBO, EBO and UBO.
@@ -681,11 +682,11 @@ CLEANUP_INVALID: {
 
 		wfDestroyObj(&obj);
 		wfDestroyMtllib(&mtllib);
-		destroy_mesh(&active);
 
 		for (uint32_t i = 0; i < arrlen(meshes); i++)
 			destroy_mesh(meshes + i);
-		arrfree(meshes);
+		free(meshes);
+		meshes = NULL;
 		goto CLEANUP;
 	}
 }
@@ -851,8 +852,8 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 		"../../../rsc/mesh/teapot.obj",
 		"../../../rsc/mesh/sphere.obj"
 	};
-
-	struct mesh* meshes = createMeshes(_countof(paths), paths, vbo, ebo, mtls, atlas);
+	const uint32_t meshCount = _countof(paths);
+	struct mesh* meshes = createMeshes(meshCount, paths, vbo, ebo, mtls, atlas);
 	assert(meshes != NULL);
 	
 	mat4 tmp;
@@ -898,7 +899,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	glVertexArrayAttribFormat (vao, 2, COMPONENTS(vec2), GL_FLOAT, false, offsetof(struct Vertex, texcoord0));
 	glEnableVertexArrayAttrib (vao, 2);
 
-	for (uint32_t ix = 0; ix < arrlen(meshes); ix++)
+	for (uint32_t ix = 0; ix < meshCount; ix++)
 	{
 		struct mesh* m = &meshes[ix];
 		m->program = program;
@@ -1050,7 +1051,6 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 		
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		const size_t meshCount = arrlenu(meshes);
 		for (uint32_t ixMesh = 0; ixMesh < meshCount; ixMesh++)
 		{
 			const struct mesh* mesh = meshes + ixMesh;
@@ -1181,10 +1181,9 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	// Cleanup
 	//
 
-	const size_t meshCount = arrlenu(meshes);
 	for (uint32_t i = 0; i < meshCount; i++) 
 		destroy_mesh(meshes + i);
-	arrfree(meshes);
+	free(meshes);
 
 	glDeleteSamplers(1, &sampler);
 	glDeleteTextures(1, &atlas);
