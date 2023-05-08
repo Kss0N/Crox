@@ -648,12 +648,18 @@ inline struct mesh* createMeshes(
 
 	assert(vertexOffset == vertexCount);
 
-	size_t 
-		mtlOffset = 0;
-	for (uint32_t i = 0; i < arrlenu(materials); i++)
+	const size_t materialCount = arrlenu(materials);
+	uint8_t* pMaterial = glMapNamedBuffer(ubo, GL_WRITE_ONLY);
+	for (uint32_t i = 0; i < materialCount; i++) 
 	{
-		glNamedBufferSubData(ubo, i * UBO_ALIGNMENT, UBO_ALIGNMENT, materials[i].buffer);
+		const struct Material* m = materials + i;
+
+		memcpy(pMaterial, m->buffer, UBO_ALIGNMENT);
+
+		pMaterial += UBO_ALIGNMENT;
 	}
+	glUnmapNamedBuffer(ubo);
+
 
 CLEANUP:
 	for (uint32_t i = 0; i < arrlenu(images); i++)
