@@ -113,10 +113,10 @@ extern APIENTRY _tWinMain(
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(nCmdShow);
 
-	_CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
+	_CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF | _CRTDBG_CHECK_ALWAYS_DF);
 	_CrtSetAllocHook(crtAllocHook);
 	_CrtSetDumpClient(crtDumpClientHook);
-	_CrtSetReportHookW2(_CRT_WARN, crtReportHook);
+	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
 	_onexit(onCrtExit);
 #ifdef _DEBUG
 	_set_invalid_parameter_handler(invalidParamHandler);
@@ -272,6 +272,7 @@ extern APIENTRY _tWinMain(
 	gladLoaderUnloadGL();
 	
 	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
+	_CrtDumpMemoryLeaks();
 	return result;
 }
 
