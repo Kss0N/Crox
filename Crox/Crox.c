@@ -251,17 +251,24 @@ CLEANUP_SOURCE:
 
 
 struct TexInfo {
-	uint16_t
+	float
 		xOffset, yOffset,
 		width, height;
 };
+_Static_assert(sizeof(struct TexInfo) == sizeof(vec4), "make sure that texinfo and vec4 are the same type as the texInfo will be 'translated' into vec4 when being transfered from cpu to gpu \n");
 
 static void uploadToMaterialBuffer(uint8_t* buf, 
-	vec3 kAmbient, 
-	vec3 kDiffuse, 
-	vec3 kSpecular, 
-	float nAlpha, 
-	float nShininess)
+	_In_ vec3 kAmbient, 
+	_In_ vec3 kDiffuse, 
+	_In_ vec3 kSpecular, 
+	_In_ float nAlpha, 
+	_In_ float nShininess,
+	_In_opt_ struct TexInfo* mAmbient,
+	_In_opt_ struct TexInfo* mDiffuse,
+	_In_opt_ struct TexInfo* mSpecular,
+	_In_opt_ struct TexInfo* mNormal,
+	_In_opt_ struct TexInfo* mAlpha,
+	_In_opt_ struct TexInfo* mShininess)
 {
 	size_t offset = 0;
 
@@ -284,7 +291,51 @@ static void uploadToMaterialBuffer(uint8_t* buf,
 	//u_specularColor
 	memcpy(buf + offset, kSpecular, sizeof(vec3));
 	offset += sizeof(vec3);
-	
+
+	//unused
+	offset += sizeof(float);
+
+	//ambient map
+	if (mAmbient)
+		memcpy(buf + offset, mAmbient, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);
+
+	//diffuse map
+	if (mDiffuse)
+		memcpy(buf + offset, mDiffuse, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);
+
+	//specular map
+	if (mSpecular)
+		memcpy(buf + offset, mSpecular, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);
+
+	//normal map
+	if (mNormal)
+		memcpy(buf + offset, mNormal, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);
+
+	//alpha map
+	if (mAlpha)
+		memcpy(buf + offset, mAlpha, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);
+
+	//shininess map
+	if (mShininess)
+		memcpy(buf + offset, mShininess, sizeof(struct TexInfo));
+	else
+		memset(buf + offset, 0, sizeof(struct TexInfo));
+	offset += sizeof(struct TexInfo);	
 }
 
 static bool parseMap(_In_ const char* path, _Out_ stbi_uc** pImage, _Out_ struct TexInfo* pInfo)
@@ -295,6 +346,8 @@ static bool parseMap(_In_ const char* path, _Out_ stbi_uc** pImage, _Out_ struct
 	stbi_uc* img = stbi_load(path, &width, &height, &eChannelLayout, STBI_rgb_alpha);
 	if (img)
 	{
+		info.width = (float)width;
+		info.height = (float)height;
 		*pImage = img;
 		*pInfo = info;
 		return true;
@@ -312,7 +365,10 @@ static size_t indicesByteSize(size_t vertexCount, size_t indexCount)
 		: indexCount * sizeof(uint32_t)
 		;
 }
-
+static uint32_t ceilTo(uint32_t x, uint32_t to)
+{
+	return to * (uint32_t)(x / to) + to;
+}
 
 
 struct group {
@@ -320,7 +376,7 @@ struct group {
 		ixFirst,
 		count;
 
-	int32_t ixMaterial;
+	 int32_t ixMaterial;
 	uint32_t materialSize;
 };
 
@@ -419,6 +475,7 @@ inline struct mesh* createMeshes(
 
 	const int32_t UBO_ALIGNMENT = getDriverConstant(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT);
 
+	stbi_set_flip_vertically_on_load(true);
 	
 	Path path;
 	for (uint32_t ix = 0;
@@ -637,9 +694,9 @@ inline struct mesh* createMeshes(
 			arrput(active->groups, g);
 		}
 		
-		active->vertexCount = (uint32_t)arrlen(obj.vertices);
+		active->vertexCount  = (uint32_t)arrlen(obj.vertices);
 		active->vertexOffset = vertexCount;
-		active->indexOffset = indexSize;
+		active-> indexOffset = indexSize;
 
 		vertexCount += (uint32_t)arrlen(obj.vertices);
 		
@@ -655,7 +712,32 @@ inline struct mesh* createMeshes(
 		//TODO
 	}
 
-	//Now let's upload the vertices, indices  and materials to the VBO, EBO and UBO.
+	//
+	// Create Atlas: (prototype) 
+	//
+
+	//NOTE: the images will just be stacked in X direction.
+
+	size_t
+		atlasWidth = 0,
+		atlasHeight = 0;
+	const uint32_t ATLAS_PIXEL_ALIGNMENT = 128;
+
+	const size_t mapCount = arrlenu(images);
+	for (uint32_t i = 0; i < mapCount; i++)
+	{
+		struct TexInfo* mapInfo = infos + i;
+
+		mapInfo->xOffset = (float)atlasWidth;
+		mapInfo->yOffset = 0; //TODO
+
+		atlasWidth += ceilTo(mapInfo->width, ATLAS_PIXEL_ALIGNMENT);
+		atlasHeight = max(atlasHeight, ceilTo(mapInfo->height, ATLAS_PIXEL_ALIGNMENT));
+	}
+
+
+
+	//Now let's upload the vertices, indices, materials and images to the VBO, EBO, UBO & Atlas.
 
 	const size_t
 		vertexDataSize = vertexCount * sizeof(struct Vertex),
@@ -664,12 +746,11 @@ inline struct mesh* createMeshes(
 	glNamedBufferData(vbo, vertexDataSize,	NULL, GL_STATIC_DRAW);
 	glNamedBufferData(ebo,      indexSize,	NULL, GL_STATIC_DRAW);
 	glNamedBufferData(ubo,   materialSize,	NULL, GL_STATIC_DRAW);
+	glTextureStorage2D(atlas, 1, GL_RGBA8, atlasWidth, atlasHeight);
 
 
-	size_t 
-		vertexOffset = 0;
+
 	uint8_t* pIndices = glMapNamedBuffer(ebo, GL_WRITE_ONLY);
-
 	for (uint32_t ix = 0; ix < count; ix++)
 	{
 		struct mesh* m = meshes + ix;
@@ -688,12 +769,24 @@ inline struct mesh* createMeshes(
 			((uint16_t*)pIndices)[i] = (uint16_t)(indicesV[ix][i]);
 
 		pIndices += indicesDataSize;
-		vertexOffset += arrlen(verticesV[ix]);
 	}
 	bool notCorrupted = glUnmapNamedBuffer(ebo);
 	assert(notCorrupted);
 
-	assert(vertexOffset == vertexCount);
+	for (uint32_t i = 0; i < mapCount; i++)
+	{
+		struct TexInfo* info = infos + i;
+		const stbi_uc* image = images[i];
+
+		glTextureSubImage2D(atlas, 0, info->xOffset, info->yOffset, info->width, info->height, GL_RGBA, GL_UNSIGNED_BYTE, image);
+
+		//change width and height into texCoord scale factor
+
+		info->width		/= atlasWidth;
+		info->height	/= atlasHeight;
+		info->xOffset	/= atlasWidth;
+		info->yOffset	/= atlasHeight;
+	}
 
 	const size_t materialCount = arrlenu(materials);
 	uint8_t* pMaterial = glMapNamedBuffer(ubo, GL_WRITE_ONLY);
@@ -701,12 +794,19 @@ inline struct mesh* createMeshes(
 	{
 		const struct Material* m = materials + i;
 
-		uploadToMaterialBuffer(pMaterial, m->ambient, m->diffuse, m->specular, m->alpha, m->shininess);
+		uploadToMaterialBuffer(pMaterial, m->ambient, m->diffuse, m->specular, m->alpha, m->shininess,
+			m->ixMapAmbient == -1 ? NULL : infos + m->ixMapAmbient,
+			m->ixMapDiffuse == -1 ? NULL : infos + m->ixMapDiffuse,
+			m->ixMapSpecular== -1 ? NULL : infos + m->ixMapSpecular,
+			m->ixMapNormal  == -1 ? NULL : infos + m->ixMapNormal,
+			m->ixMapAlpha	== -1 ? NULL : infos + m->ixMapAlpha,
+			m->ixMapShininess==-1 ? NULL : infos + m->ixMapShininess
+		);
 
 		pMaterial += UBO_ALIGNMENT;
 	}
-	glUnmapNamedBuffer(ubo);
-
+	notCorrupted = glUnmapNamedBuffer(ubo);
+	assert(notCorrupted);
 
 CLEANUP:
 	for (uint32_t i = 0; i < arrlenu(images); i++)
@@ -833,7 +933,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 
 			   lightingUBO = createUBO(2 * sizeof(vec4), GL_DYNAMIC_DRAW),
 
-		defaultMaterialUBO = createUBO(4 * sizeof(vec4),  GL_STATIC_DRAW);
+		defaultMaterialUBO = createUBO(9 * sizeof(vec4),  GL_STATIC_DRAW);
 	
 	if			(matrixUBO)	NAME_OBJECT(GL_BUFFER,			matrixUBO,					 "<Matrix Uniform Buffer>");
 	if			(cameraUBO)	NAME_OBJECT(GL_BUFFER,			cameraUBO,			"<Camera Position Uniform Buffer>");
@@ -866,7 +966,7 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 
 	uint8_t* block = glMapNamedBuffer(defaultMaterialUBO, GL_WRITE_ONLY);
 	{
-		uploadToMaterialBuffer(block, DEFAULT_AMBIENT, DEFAULT_DIFFUSE, DEFAULT_SPECULAR, DEFAULT_ALPHA, DEFAULT_SHININESS);
+		uploadToMaterialBuffer(block, DEFAULT_AMBIENT, DEFAULT_DIFFUSE, DEFAULT_SPECULAR, DEFAULT_ALPHA, DEFAULT_SHININESS, NULL, NULL, NULL, NULL, NULL, NULL);
 	}
 	const GLboolean notCorrupted = glUnmapNamedBuffer(defaultMaterialUBO);
 	assert(notCorrupted); //TODO
@@ -971,6 +1071,9 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	glSamplerParameteri (sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	GLfloat samplerBorderColor[4] = {0, 0, .2f, 1.0f};
 	glSamplerParameterfv(sampler, GL_TEXTURE_BORDER_COLOR, samplerBorderColor);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, atlas);
 
 	//
 	// Render loop variables
