@@ -1,5 +1,3 @@
-#include <cJSON.h>
-#include <cJSON_Utils.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <glad/gl.h>

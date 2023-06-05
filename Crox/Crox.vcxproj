@@ -185,8 +185,6 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\externals\cJSON.c" />
-    <ClCompile Include="..\externals\cJSON_Utils.c" />
     <ClCompile Include="..\externals\cwalk.c" />
     <ClCompile Include="..\externals\gl.c" />
     <ClCompile Include="..\externals\hashmap.c" />
@@ -195,7 +193,11 @@
     <ClCompile Include="..\externals\xml.c" />
     <ClCompile Include="camera.c" />
     <ClCompile Include="Crox.c" />
-    <ClCompile Include="gltf.c" />
+    <ClCompile Include="gltf.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="json.c" />
     <ClCompile Include="nuklear_impl.c" />
     <ClCompile Include="platform\win32.c" />
     <ClCompile Include="stb_impl.c" />
@@ -210,6 +212,7 @@
     <ClInclude Include="framework_spirv.h" />
     <ClInclude Include="framework_vulkan.h" />
     <ClInclude Include="framework_winapi.h" />
+    <ClInclude Include="json.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="mesh.h" />
     <ClInclude Include="NullSemantics.h" />
