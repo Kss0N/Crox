@@ -149,6 +149,9 @@
     <ClInclude Include="wavefront.h">
       <Filter>Header Files\standards</Filter>
     </ClInclude>
+    <ClInclude Include="gltf.h">
+      <Filter>Header Files\standards</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Crox.rc">

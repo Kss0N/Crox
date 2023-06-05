@@ -212,6 +212,7 @@
     <ClInclude Include="framework_spirv.h" />
     <ClInclude Include="framework_vulkan.h" />
     <ClInclude Include="framework_winapi.h" />
+    <ClInclude Include="gltf.h" />
     <ClInclude Include="json.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="mesh.h" />
