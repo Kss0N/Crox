@@ -1,0 +1,163 @@
+#pragma once
+#define CL_NO_PROTOTYPES
+
+#include <CL/cl.h>
+#include <CL/cl_gl.h>
+#include <CL/cl_ext.h>
+#include <CL/cl_function_types.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+;
+
+extern clGetPlatformIDs_fn	clGetPlatformIDs;
+extern clGetPlatformInfo_fn clGetPlatformInfo;
+extern clGetDeviceIDs_fn	clGetDeviceIDs;
+extern clGetDeviceInfo_fn	clGetDeviceInfo;
+extern clCreateContext_fn	clCreateContext;
+extern clCreateContextFromType_fn clCreateContextFromType;
+extern clRetainContext_fn	clRetainContext;
+extern clReleaseContext_fn	clReleaseContext;
+extern clGetContextInfo_fn	clGetContextInfo;
+extern clRetainCommandQueue_fn clRetainCommandQueue;
+extern clReleaseCommandQueue_fn clReleaseCommandQueue;
+extern clGetCommandQueueInfo_fn clGetCommandQueueInfo;
+extern clCreateBuffer_fn	clCreateBuffer;
+extern clRetainMemObject_fn	clRetainMemObject;
+extern clReleaseMemObject_fn clReleaseMemObject;
+extern clGetSupportedImageFormats_fn clGetSupportedImageFormats;
+extern clGetMemObjectInfo_fn clGetMemObjectInfo;
+extern clGetImageInfo_fn	clGetImageInfo;
+extern clRetainSampler_fn	clRetainSampler;
+extern clReleaseSampler_fn	clReleaseSampler;
+extern clGetSamplerInfo_fn	clGetSamplerInfo;
+extern clCreateProgramWithSource_fn clCreateProgramWithSource;
+extern clCreateProgramWithBinary_fn clCreateProgramWithBinary;
+extern clRetainProgram_fn	clRetainProgram;
+extern clReleaseProgram_fn	clReleaseProgram;
+extern clBuildProgram_fn	clBuildProgram;
+extern clGetProgramInfo_fn	clGetProgramInfo;
+extern clGetProgramBuildInfo_fn clGetProgramBuildInfo;
+extern clCreateKernel_fn	clCreateKernel;
+extern clCreateKernelsInProgram_fn clCreateKernelsInProgram;
+extern clRetainKernel_fn	clRetainKernel;
+extern clReleaseKernel_fn	clReleaseKernel;
+extern clSetKernelArg_fn	clSetKernelArg;
+extern clGetKernelInfo_fn	clGetKernelInfo;
+extern clGetKernelWorkGroupInfo_fn clGetKernelWorkGroupInfo;
+extern clWaitForEvents_fn	clWaitForEvents;
+extern clGetEventInfo_fn	clGetEventInfo;
+extern clRetainEvent_fn		clRetainEvent;
+extern clReleaseEvent_fn	clReleaseEvent;
+extern clGetEventProfilingInfo_fn clGetEventProfilingInfo;
+extern clFlush_fn			clFlush;
+extern clFinish_fn			clFinish;
+
+extern clEnqueueReadBuffer_fn clEnqueueReadBuffer;
+extern clEnqueueWriteBuffer_fn clEnqueueWriteBuffer;
+extern clEnqueueCopyBuffer_fn clEnqueueCopyBuffer;
+extern clEnqueueReadImage_fn clEnqueueReadImage;
+extern clEnqueueWriteImage_fn clEnqueueWriteImage;
+extern clEnqueueCopyImage_fn clEnqueueCopyImage;
+extern clEnqueueCopyImageToBuffer_fn clEnqueueCopyImageToBuffer;
+extern clEnqueueCopyBufferToImage_fn clEnqueueCopyBufferToImage;
+extern clEnqueueMapBuffer_fn clEnqueueMapBuffer;
+extern clEnqueueMapImage_fn clEnqueueMapImage;
+extern clEnqueueUnmapMemObject_fn clEnqueueUnmapMemObject;
+extern clEnqueueNDRangeKernel_fn clEnqueueNDRangeKernel;
+extern clEnqueueNativeKernel_fn clEnqueueNativeKernel;
+extern clSetCommandQueueProperty_fn clSetCommandQueueProperty;
+extern clCreateImage2D_fn clCreateImage2D;
+extern clCreateImage3D_fn clCreateImage3D;
+extern clEnqueueMarker_fn clEnqueueMarker;
+extern clEnqueueWaitForEvents_fn clEnqueueWaitForEvents;
+extern clEnqueueBarrier_fn clEnqueueBarrier;
+extern clUnloadCompiler_fn clUnloadCompiler;
+extern clGetExtensionFunctionAddress_fn clGetExtensionFunctionAddress;
+extern clCreateCommandQueue_fn clCreateCommandQueue;
+extern clCreateSampler_fn clCreateSampler;
+extern clEnqueueTask_fn clEnqueueTask;
+extern clCreateSubBuffer_fn clCreateSubBuffer;
+extern clSetMemObjectDestructorCallback_fn clSetMemObjectDestructorCallback;
+extern clCreateUserEvent_fn clCreateUserEvent;
+extern clSetUserEventStatus_fn clSetUserEventStatus;
+extern clSetEventCallback_fn clSetEventCallback;
+extern clEnqueueReadBufferRect_fn clEnqueueReadBufferRect;
+extern clEnqueueWriteBufferRect_fn clEnqueueWriteBufferRect;
+extern clEnqueueCopyBufferRect_fn clEnqueueCopyBufferRect;
+extern clCreateSubDevices_fn clCreateSubDevices;
+extern clRetainDevice_fn clRetainDevice;
+extern clReleaseDevice_fn clReleaseDevice;
+extern clCreateImage_fn clCreateImage;
+extern clCreateProgramWithBuiltInKernels_fn clCreateProgramWithBuiltInKernels;
+extern clCompileProgram_fn clCompileProgram;
+extern clLinkProgram_fn clLinkProgram;
+extern clUnloadPlatformCompiler_fn clUnloadPlatformCompiler;
+extern clGetKernelArgInfo_fn clGetKernelArgInfo;
+extern clEnqueueFillBuffer_fn clEnqueueFillBuffer;
+extern clEnqueueFillImage_fn clEnqueueFillImage;
+extern clEnqueueMigrateMemObjects_fn clEnqueueMigrateMemObjects;
+extern clEnqueueMarkerWithWaitList_fn clEnqueueMarkerWithWaitList;
+extern clEnqueueBarrierWithWaitList_fn clEnqueueBarrierWithWaitList;
+extern clGetExtensionFunctionAddressForPlatform_fn clGetExtensionFunctionAddressForPlatform;
+extern clCreateCommandQueueWithProperties_fn clCreateCommandQueueWithProperties;
+extern clCreatePipe_fn clCreatePipe;
+extern clGetPipeInfo_fn clGetPipeInfo;
+extern clSVMAlloc_fn clSVMAlloc;
+extern clSVMFree_fn clSVMFree;
+extern clCreateSamplerWithProperties_fn clCreateSamplerWithProperties;
+extern clSetKernelArgSVMPointer_fn clSetKernelArgSVMPointer;
+extern clSetKernelExecInfo_fn clSetKernelExecInfo;
+extern clEnqueueSVMFree_fn clEnqueueSVMFree;
+extern clEnqueueSVMMemcpy_fn clEnqueueSVMMemcpy;
+extern clEnqueueSVMMemFill_fn clEnqueueSVMMemFill;
+extern clEnqueueSVMMap_fn clEnqueueSVMMap;
+extern clEnqueueSVMUnmap_fn clEnqueueSVMUnmap;
+extern clSetDefaultDeviceCommandQueue_fn clSetDefaultDeviceCommandQueue;
+extern clGetDeviceAndHostTimer_fn clGetDeviceAndHostTimer;
+extern clGetHostTimer_fn clGetHostTimer;
+extern clCreateProgramWithIL_fn clCreateProgramWithIL;
+extern clCloneKernel_fn clCloneKernel;
+extern clGetKernelSubGroupInfo_fn clGetKernelSubGroupInfo;
+extern clEnqueueSVMMigrateMem_fn clEnqueueSVMMigrateMem;
+extern clSetProgramSpecializationConstant_fn clSetProgramSpecializationConstant;
+extern clSetProgramReleaseCallback_fn clSetProgramReleaseCallback;
+extern clSetContextDestructorCallback_fn clSetContextDestructorCallback;
+extern clCreateBufferWithProperties_fn clCreateBufferWithProperties;
+extern clCreateImageWithProperties_fn clCreateImageWithProperties;
+
+
+
+extern clGetGLContextInfoKHR_fn clGetGLContextInfoKHR;
+extern clCreateFromGLBuffer_fn clCreateFromGLBuffer;
+extern clCreateFromGLTexture_fn clCreateFromGLTexture;
+extern clCreateFromGLRenderbuffer_fn clCreateFromGLRenderbuffer;
+extern clGetGLObjectInfo_fn clGetGLObjectInfo;
+extern clGetGLTextureInfo_fn	clGetGLTextureInfo;
+extern clEnqueueAcquireGLObjects_fn clEnqueueAcquireGLObjects;
+extern clEnqueueReleaseGLObjects_fn clEnqueueReleaseGLObjects;
+extern clCreateFromGLTexture2D_fn clCreateFromGLTexture2D;
+extern clCreateFromGLTexture3D_fn clCreateFromGLTexture3D;
+
+#ifdef cl_khr_gl_event
+
+extern clCreateEventFromGLsyncKHR_fn clCreateEventFromGLsyncKHR;
+
+#endif // cl_khr_event
+
+#if cl_intel_sharing_format_query_gl
+
+extern clGetSupportedGLTextureFormatsINTEL_fn clGetSupportedGLTextureFormatsINTEL;
+
+#endif // cl_khr_gl_depth_images
+
+
+typedef void (*CLADapiproc)(void);
+typedef CLADapiproc (*CLADuserptrloadfunc)(void* userptr, const char* name);
+
+int clLoadCLUserPtr(CLADuserptrloadfunc load, void* userptr);
+
+#ifdef __cplusplus
+};
+#endif // __cplusplus

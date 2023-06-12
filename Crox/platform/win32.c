@@ -14,6 +14,8 @@
 #include "framework_winapi.h"
 #include "framework_nuklear.h"
 #include "framework_crt.h"
+#include "framework_cl.h"
+
 #include "resource.h"
 #include "Crox.h"
 #include "Platform.h"
@@ -59,7 +61,7 @@ static void __cdecl invalidParamHandler(
 
 static int __CRTDECL crtReportHook(_In_ int eType, _In_ LPWSTR msg, _In_ int* ret);
 
-static BOOL loadOpenGL(_In_ HINSTANCE hInstance);
+static BOOL loadOpenGL(_In_ HINSTANCE hInstance, HMODULE dllOpenGL);
 
 static LRESULT APIENTRY setupWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM, _In_ LPARAM);
 static LRESULT APIENTRY mainWndProc(_In_ HWND hWnd, _In_ UINT msg, _In_ WPARAM, _In_ LPARAM);
@@ -93,6 +95,35 @@ inline HACCEL	getAccel(NkContext* ctx)
 	return getResources(ctx)->hAccel;
 }
 
+
+
+static CLADapiproc cladUserptrloadfunc(void* userptr, const char* name)
+{
+	HMODULE dll = (HMODULE)userptr;
+	return (CLADapiproc)GetProcAddress(dll, (LPCSTR)name);
+}
+static GLADapiproc gladUserptrloadfunc(void* userptr, const char* name)
+{
+	//
+	// It looks a little wonky because 
+	//
+	
+	HMODULE dll = (HMODULE)userptr;
+
+	void* p = (void*)wglGetProcAddress(name);
+	if	(p == (void*)0x0  ||
+		(p == (void*)0x1) || 
+		(p == (void*)0x2) || 
+		(p == (void*)0x3) ||
+		(p == (void*)-1))
+	{
+		p = (void*)GetProcAddress(dll, name);
+	}
+	return p;
+}
+
+
+
 /**
 	@brief  Application Entry point
 	@param  hInstance     - 
@@ -124,13 +155,21 @@ extern APIENTRY _tWinMain(
 #endif // _DEBUG
 	//TODO: locales
 
-	BOOL glInitialized = loadOpenGL(hInstance);
+	HMODULE dllOpenCL = LoadLibrary(_T("OpenCL64.dll"));
+	HMODULE dllOpenGL = LoadLibrary(_T("OpenGL32.dll"));
+
+	BOOL glInitialized = loadOpenGL(hInstance, dllOpenGL);
 	assert(glInitialized);
+
+	BOOL clInitialized = clLoadCLUserPtr(cladUserptrloadfunc, (void*)dllOpenCL);
+	assert(clInitialized);
 
 #ifdef _DEBUG
 	gladInstallGLDebug();
 	gladInstallWGLDebug();
 #endif // _DEBUG
+
+	
 
 
 	const UINT NAMEBUF_SIZE = 128;
@@ -351,7 +390,7 @@ int crtReportHook(_In_ int eType, _In_ LPWSTR msg, _In_ int* ret)
 	return FALSE;
 }
 
-BOOL loadOpenGL(_In_ HINSTANCE hInstance)
+BOOL loadOpenGL(_In_ HINSTANCE hInstance, HMODULE dllOpenGL)
 {
 	WNDCLASS wc = {
 		.style = CS_OWNDC,
@@ -385,8 +424,8 @@ BOOL loadOpenGL(_In_ HINSTANCE hInstance)
 	int format = 0;
 
 	BOOL ctxInitalized =
-		(aCls = RegisterClass(&wc))&&
-		(hWnd = CreateWindow((LPCTSTR)aCls, TEXT("NONAME"), styles, 
+		(aCls = RegisterClass(&wc)) &&
+		(hWnd = CreateWindow((LPCTSTR)aCls, TEXT("NONAME"), styles,
 			//X * Y
 			CW_USEDEFAULT, 0,
 			//Width x Height
@@ -397,8 +436,8 @@ BOOL loadOpenGL(_In_ HINSTANCE hInstance)
 		SetPixelFormat(hDC, format, &pfd) &&
 		(hCtx = wglCreateContext(hDC)) &&
 		wglMakeCurrent(hDC, hCtx) &&
-		gladLoaderLoadGL() &&
-		gladLoaderLoadWGL(hDC)
+		gladLoadGLUserPtr(gladUserptrloadfunc, dllOpenGL) &&
+		gladLoaderLoadWGL(hDC);
 		;
 	assert(ctxInitalized);
 
@@ -764,3 +803,24 @@ int log_logEntry(_In_ int severity, _Printf_format_string_ TCHAR* fmt, ...)
 #else
 
 #endif // _DEBUG
+
+
+_Success_(return != NULL) 
+PlatformDLLHandle platform_loadLibrary(_In_ NkContext * ctx, _In_z_ const char* libraryPath)
+{
+	UNREFERENCED_PARAMETER(ctx);
+	HINSTANCE hInstLibrary = LoadLibraryA(libraryPath);
+	return (PlatformDLLHandle) hInstLibrary;
+}
+
+void platform_freeLibrary(_In_ NkContext* ctx, PlatformDLLHandle dll)
+{
+	UNREFERENCED_PARAMETER(ctx);
+	FreeLibrary(dll);
+}
+
+_Success_(return != NULL)
+void* platform_getProcAdress(PlatformDLLHandle dll, _In_z_ const char* name)
+{
+	return (void*)GetProcAddress((HMODULE)dll, name);
+}

@@ -26,6 +26,13 @@ enum   GLTFanimation_sampler_interpolation;
 struct GLTFasset;
 
 
+struct	GLTFaudioKHR;
+struct	GLTFaudioEmitterKHR;
+enum	GLTFaudioEmitter_typeKHR;
+enum	GLTFaudioEmitter_distanceModel;
+struct	GLTFaudioSourceKHR;
+
+
 struct GLTFbuffer;
 
 
@@ -43,6 +50,10 @@ struct GLTFgltf;
 struct GLTFimage;
 
 
+struct GLTFlightKHR;
+enum GLTFlight_typeKHR;
+
+
 struct GLTFmaterial;
 enum   GLTFmaterial_alphaMode;
 
@@ -51,9 +62,11 @@ struct GLTFmesh;
 struct GLTFmesh_primitive;
 struct GLTFmesh_primitive_attributesKV;
 struct GLTFmesh_primitive_targetsKV;
+struct GLTFmesh_primitive_compressionDataKHR;
+struct GLTFmesh_primitive_variantMappingsKHR;
 
 
-enum   GLTFmimetType;
+enum   GLTFmimeType;
 
 typedef _Null_terminated_ const char* GLTFname;
 
@@ -75,13 +88,22 @@ struct GLTFtextureInfo
 {
 	const struct GLTFtextureInfo* texture;
 	uint32_t texCoord;
+	
+	float
+		offset[2],
+		rotation,
+		scale[2];
 };
+
+struct GLTFvariantKHR;
 
 #include <stdio.h>
 
 extern struct GLTFgltf gltfRead(_In_ FILE* f,_In_ bool isGLB);
 
 extern void gltfClear(_In_ struct GLTFgltf*);
+
+extern GLTFname gltfMimeTypeToString(_In_ enum GLTFmimeType);
 
 
 struct GLTFaccessor_sparse
@@ -113,7 +135,7 @@ struct GLTFaccessor
 	bool normalized;
 	uint32_t count;
 	enum GLTFaccessor_type type;
-	GLTFaccessor_minmax 
+	union GLTFaccessor_minmax 
 		max[16],
 		min[16];
 	struct GLTFaccessor_sparse sparse;
@@ -156,7 +178,7 @@ enum   GLTFanimation_channel_target_path
 };
 struct GLTFanimation_sampler
 {
-	const GLTFaccessor
+	const struct GLTFaccessor
 		* input,
 		* output;
 	enum GLTFanimation_sampler_interpolation interpolation;
@@ -169,12 +191,58 @@ enum   GLTFanimation_sampler_interpolation
 };
 
 
-struct GLTFasset
+struct	GLTFasset
 {
 	GLTFname copyright;
 	GLTFname generator;
 	GLTFname version;
 	GLTFname minVersion;
+};
+
+
+struct	GLTFaudioKHR
+{
+	union {
+		const struct GLTFbufferView* bufferView;
+		GLTFname uri;
+	};
+	enum GLTFmimeType mimeType;
+};
+struct	GLTFaudioEmitterKHR
+{
+	GLTFname name;
+	enum GLTFaudioEmitter_typeKHR type;
+	float gain;
+	const struct GLTFaudioSourceKHR** sources;
+
+	float
+		coneInnerAngle,
+		coneOuterAngle,
+		coneOuterGain,
+		maxDistance,
+		refDistance,
+		rolloffFactor;
+	enum GLTFaudioEmitter_distanceModel distanceModel;
+
+};
+enum	GLTFaudioEmitter_typeKHR
+{
+	GLTFaudioEmitter_type_positional,
+	GLTFaudioEmitter_type_global,
+};
+enum	GLTFaudioEmitter_distanceModel
+{
+	GLTFaudioEmitter_distanceModel_linear,
+	GLTFaudioEmitter_distanceModel_inverse,
+	GLTFaudioEmitter_distanceModel_exponential,
+};
+struct	GLTFaudioSourceKHR
+{
+	GLTFname name;
+	float gain;
+	bool autoPlay;
+	bool loop;
+	const struct GLTFaudioKHR audio;
 };
 
 
@@ -220,8 +288,8 @@ struct GLTFcamera
 {
 	union 
 	{
-		GLTFcamera_orthographic orthographic;
-		GLTFcamera_perspective  perspective;
+		struct GLTFcamera_orthographic orthographic;
+		struct GLTFcamera_perspective  perspective;
 	};
 	bool isPerspective;
 };
@@ -229,23 +297,29 @@ struct GLTFcamera
 
 struct GLTFgltf
 {
-	GLTFname				* extensionsUsed,
-							* extensionsRequired;
-	struct GLTFaccessor		* accessors;
-	struct GLTFanimation	* animations;
-	struct GLTFbuffer		* buffers;
-	struct GLTFbufferView	* bufferView;
-	struct GLTFcamera		* cameras;
-	struct GLTFimage		* images;
-	struct GLTFmaterial		* materials;
-	struct GLTFmesh			* mesh;
-	struct GLTFnode			* nodes;
-	struct GLTFsampler		* sampler;
-	struct GLTFscene		* scenes;
-	struct GLTFskin			* skins;
-	struct GLTFtexture		* textures;
+	GLTFname					* extensionsUsed,
+								* extensionsRequired;
+	struct GLTFaccessor			* accessors;
+	struct GLTFanimation		* animations;
+	struct GLTFbuffer			* buffers;
+	struct GLTFbufferView		* bufferView;
+	struct GLTFcamera			* cameras;
+	struct GLTFimage			* images;
+	struct GLTFmaterial			* materials;
+	struct GLTFmesh				* mesh;
+	struct GLTFnode				* nodes;
+	struct GLTFsampler			* sampler;
+	struct GLTFscene			* scenes;
+	struct GLTFskin				* skins;
+	struct GLTFtexture			* textures;
 
-	GLTFasset asset;
+	struct GLTFlightKHR			* lights;
+	struct GLTFvariantKHR		* variants;
+	struct GLTFaudioKHR			* audio;
+	struct GLTFaudioEmitterKHR	* emitters;
+	struct GLTFaudioSourceKHR	* sources;
+
+	struct GLTFasset asset;
 	const struct GLTFscene* scene;
 };
 
@@ -272,17 +346,76 @@ struct GLTFmaterial
 		normalScale,
 		occlusionStrength,
 		emissiveFactor[3],
-		alphaCutoff;
+		alphaCutoff,
+	// KHR_materials_anisotropy
+		anisotropyStrength,
+		anisotropyRotation,
+	// KHR_materials_clearcoat
+		clearcoatFactor,
+		clearcoatRoughnessFactor,
+		clearcoatNormalScale,
+	// KHR_materials_diffuse_transmission
+		diffuseTransmissionFactor,
+		diffuseTransmissionColorFactor[3],
+	// KHR_materials_emissive_strength
+		emissiveStrength,
+	// KHR_materials_ior
+		ior,
+	// KHR_materials_iridescence
+		iridescenceFactor,
+		iridescenceIor,
+		iridescenceThicknessMinimum,
+		iridescenceThicknessMaximum,
+	// KHR_materials_sheen
+		sheenColorFactor[3],
+		sheenRoughnessFactor,
+	// KHR_materials_specular
+		specularFactor,
+		specularColorFactor[3],
+	// KHR_materials_sss
+		scatterDistance,
+		scatterColor[3],
+	// KHR_materials_transmission
+		transmissionFactor,
+	// KHR_materials_volume
+		thicknessFactor,
+		attenuationDistance,
+		attenuationColor[3]
+		;
 
 	bool doubleSided;
 	enum GLTFmaterial_alphaMode alphaMode;
+	bool unlit;
 
 	struct GLTFtextureInfo
 		baseColorTexture,
 		metallicRoughnessFactor,
 		normalTexture,
 		occlusionTexture,
-		emissiveTexture;
+		emissiveTexture,
+	// KHR_materials_anisotropy
+		anisotropyTexture,
+	// KHR_materials_clearcoat
+		clearcoatTexture,
+		clearcoatRoughnessTexture,
+		clearcoatNormalTexture,
+	// KHR_materials_diffuse_transmission
+		diffuseTransmissionTexture,
+		diffuseTransmissionColorTexture,
+	// KHR_materials_iridescence
+		iridescenceTexture,
+		iridescenceThicknessTexture,
+	// KHR_materials_sheen
+		sheenColorTexture,
+		sheenRoughnessTexture,
+	// KHR_materials_specular
+		specularTexture,
+		specularColorTexture,
+	// KHR_materials_transmission
+		transmissionTexture,
+	// KHR_materials_volume
+		thicknessTexture
+		;
 };
 enum   GLTFmaterial_alphaMode
 {
@@ -299,6 +432,11 @@ struct GLTFmesh
 
 	GLTFname name;
 };
+struct GLTFmesh_primitive_compressionDataKHR
+{
+	const struct GLTFbufferView* bufferView;
+	struct GLTFmesh_primitive_attributesKV* attributes;
+};
 struct GLTFmesh_primitive
 {
 	struct GLTFmesh_primitive_attributesKV* attributes;
@@ -306,6 +444,8 @@ struct GLTFmesh_primitive
 	const struct GLTFmaterial* material;
 	struct GLTFmesh_primitive_targetsKV* targets;
 	GLenum mode;
+
+	struct GLTFmesh_primitive_compressionDataKHR compressionData;
 };
 struct GLTFmesh_primitive_attributesKV
 {
@@ -316,6 +456,12 @@ struct GLTFmesh_primitive_targetsKV
 {
 	char* key;
 	const struct GLTFaccessor* value;
+};
+
+struct GLTFmesh_primitive_variantMappingsKHR 
+{
+	const struct GLTFmaterial* material;
+	const struct GLTFvariantKHR** variants;
 };
 
 
@@ -334,11 +480,18 @@ struct GLTFnode
 		* weights;
 
 	GLTFname name;
+
+	const struct GLTFlightKHR* light;
+	const struct GLTFaudioEmitterKHR* emitter;
 };
 
 
 enum   GLTFmimeType
 {
+	GLTFmimeType_NONE,
+
+	GLTFmimeType_AUDIO_MPEG,
+
 	GLTFmimeType_IMAGE_JPEG,
 	GLTFmimeType_IMAGE_PNG,
 };
@@ -359,6 +512,8 @@ struct GLTFscene
 {
 	struct GLTFnode* nodes;
 	GLTFname name;
+
+	const struct GLTFaudioEmitterKHR** emitters;
 };
 
 
@@ -375,5 +530,29 @@ struct GLTFtexture
 {
 	const struct GLTFsampler* sampler;
 	const struct GLTFimage* source;
+	GLTFname name;
+};
+
+
+struct GLTFlightKHR
+{
+	float
+		color[3],
+		intensity,
+		range;
+	enum GLTFlights_typeKHR type;
+
+	GLTFname name;
+};
+enum GLTFlight_typeKHR
+{
+	GLTFlight_type_point,
+	GLTFlight_type_spot,
+	GLTFlight_type_directional,
+};
+
+
+struct GLTFvariantKHR
+{
 	GLTFname name;
 };

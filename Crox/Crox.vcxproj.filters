@@ -105,6 +105,9 @@
     <ClCompile Include="wavefront.c">
       <Filter>Source Files\standards</Filter>
     </ClCompile>
+    <ClCompile Include="clLoader.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework_nuklear.h">
@@ -151,6 +154,9 @@
     </ClInclude>
     <ClInclude Include="gltf.h">
       <Filter>Header Files\standards</Filter>
+    </ClInclude>
+    <ClInclude Include="framework_cl.h">
+      <Filter>Header Files\framework</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
