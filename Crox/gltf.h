@@ -207,6 +207,8 @@ enum   GLTFanimation_channel_target_path
 	GLTFanimation_channel_target_path_ROTATION,
 	GLTFanimation_channel_target_path_SCALE,
 	GLTFanimation_channel_target_path_WEIGHTS,
+
+	GLTFanimation_channel_target_path_max,
 };
 struct GLTFanimation_sampler
 {
@@ -220,6 +222,7 @@ enum   GLTFanimation_sampler_interpolation
 	GLTFanimation_sampler_interpolation_LINEAR,
 	GLTFanimation_sampler_interpolation_STEP,
 	GLTFanimation_sampler_interpolation_CUBICSPLINE,
+	GLTFanimation_sampler_interpolation_max,
 };
 
 

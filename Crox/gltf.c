@@ -22,7 +22,7 @@ struct StringArrayReadCtx
 {
 	uint32_t unused;
 };
-_Success_(return != false) bool parseStringArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+static _Success_(return != false) bool parseStringArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	char** strArr = (char**)userData;
 
@@ -33,6 +33,9 @@ _Success_(return != false) bool parseStringArrayCallback(_In_ JSONarray a, _In_ 
 
 	return true;
 }
+
+
+
 
 static enum GLTFaccessor_type parseAccessorType(_In_z_ const char* type)
 {
@@ -117,14 +120,13 @@ static struct GLTFaccessor_sparse parseAccessorSparse(_In_opt_ JSONobject o, _In
 	};
 }
 
-
 struct AccessorReadCtx
 {
 	struct GLTFaccessor* accessors;
 
 	const struct GLTFbufferView* bufferViews;
 };
-_Success_(return != false) bool parseAccessorArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+static _Success_(return != false) bool parseAccessorArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct AccessorReadCtx* ctx = (struct AccessorReadCtx*)userData;
 	JSONobject o = v.object;
@@ -138,10 +140,161 @@ _Success_(return != false) bool parseAccessorArrayCallback(_In_ JSONarray a, _In
 		.count = jsonObjectGet(o, "count").uint,
 		.type = parseAccessorType(jsonObjectGet(o, "type").string),
 		.sparse = parseAccessorSparse(jsonObjectGetOrElse(o, "sparse", JVU(object = NULL)).object, ctx->bufferViews),
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", JVU(string = NULL) ).string)
 	};
 	uint32_t minmaxC = _gltfAccessorTypeComponentCount(acc.type);
 	parseAccessorMinMax(minmaxC, acc.max, jsonObjectGetOrElse(o, "max", JVU(array = NULL)).array, acc.componenType);
 	parseAccessorMinMax(minmaxC, acc.min, jsonObjectGetOrElse(o, "min", JVU(array = NULL)).array, acc.componenType);
+
+	ctx->accessors[ix] = acc;
+
+
+	return true;
+}
+
+
+
+
+static enum GLTFanimation_sampler_interpolation animationSamplerInterpolationFromString(_In_z_ const char* i)
+{
+	return 
+		strcmp(i, "LINEAR") == 0 ? GLTFanimation_sampler_interpolation_LINEAR :
+		strcmp(i, "STEP")	== 0 ? GLTFanimation_sampler_interpolation_STEP :
+		strcmp(i, "CUBICSPLINE") == 0 ? GLTFanimation_sampler_interpolation_CUBICSPLINE : 
+		
+		GLTFanimation_sampler_interpolation_max;
+}
+struct AnimationSamplerReadCtx
+{
+	struct GLTFanimation_sampler* samplers;
+
+	const struct GLTFaccessor* accessors;
+};
+static _Success_(return != false) bool parseAnimationSamplerCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct AnimationSamplerReadCtx* ctx = (struct AnimationSamplerReadCtx*)userData;
+	JSONobject o = v.object;
+
+	struct GLTFanimation_sampler sampler = {
+		. input = ctx->accessors + jsonObjectGet(o,  "input").uint,
+		.output = ctx->accessors + jsonObjectGet(o, "output").uint,
+
+		.interpolation = animationSamplerInterpolationFromString(jsonObjectGetOrElse(o, "interpolation", JVU(string = "LINEAR")).string),
+
+	};
+	ctx->samplers[ix] = sampler;
+
+
+	return true;
+}
+
+
+static enum GLTFanimation_channel_target_path animationChannelTargetPathFromString(const char* path)
+{
+	return 
+		strcmp(path, "translation") == 0 ? GLTFanimation_channel_target_path_TRANSLATION : 
+		strcmp(path, "rotation")	== 0 ? GLTFanimation_channel_target_path_ROTATION :
+		strcmp(path, "scale")		== 0 ? GLTFanimation_channel_target_path_SCALE : 
+		strcmp(path, "weights")		== 0 ? GLTFanimation_channel_target_path_WEIGHTS :
+
+		GLTFanimation_channel_target_path_max;
+}
+struct AnimationChannelReadCtx
+{
+	struct GLTFanimation_channel* channels;
+
+	const struct GLTFanimation_sampler* samplers;
+	const struct GLTFnode* nodes;
+};
+static _Success_(return != false) bool parseAnimationChannelArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct AnimationChannelReadCtx* ctx = (struct AnimationChannelReadCtx*)userData;
+	JSONobject
+		o = v.object,
+		target = jsonObjectGet(o, "target").object;
+
+	struct GLTFanimation_channel c = {
+		.sampler = ctx->samplers + jsonObjectGet(o, "sampler").uint,
+		
+		.target_node = jsonObjectGetType(target, "node") == JSONtype_INTEGER ? ctx->nodes + jsonObjectGet(target, "node").uint : NULL,
+		.target_path = animationChannelTargetPathFromString(jsonObjectGet(target, "path").string),
+	};
+	ctx->channels[ix] = c;
+
+	return true;
+}
+
+
+struct AnimationReadCtx
+{
+	struct GLTFanimation* animations;
+
+	const struct GLTFaccessor* accessors;
+	const struct GLTFnode* nodes;
+};
+static _Success_(return != false) bool parseAnimationArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct AnimationReadCtx* ctx = (struct AnimatonReadCtx*)userData;
+	JSONobject
+		o = v.object;
+	JSONarray
+		channels = jsonObjectGet(o, "channels").array,
+		samplers = jsonObjectGet(o, "samplers").array;
+
+	struct GLTFanimation an = {
+		.channels = NULL,
+		.samplers = NULL,
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", JVU(string = NULL)).string)
+	};
+	arrsetlen(an.channels, jsonArrayGetSize(channels));
+	arrsetlen(an.samplers, jsonArrayGetSize(samplers));
+
+
+	struct AnimationSamplerReadCtx samplerCtx = { 
+		.samplers = an.samplers, 
+		.accessors = ctx->accessors 
+	};
+	if (jsonArrayForeach(samplers, parseAnimationSamplerCallback, &samplerCtx) != 0)
+	{
+		//parsing failed
+		arrfree(an.samplers);
+		return false;
+	}		
+
+	struct AnimationChannelReadCtx channelCtx = {
+		.channels = an.channels,
+		.samplers = an.samplers,
+		.nodes = ctx->nodes,
+	};
+	if (jsonArrayForeach(channels, parseAnimationChannelArrayCallback, &channelCtx) != 0)
+	{
+		//parsing failed!
+		arrfree(an.channels);
+		return false;
+	}
+		
+
+	ctx->animations[ix] = an;
+	return true;
+}
+
+
+
+
+struct BufferReadCtx {
+	struct GLTFbuffer* buffers;
+
+	bool isGLB;
+	void* data;
+};
+static _Success_(return != false) bool parseBufferArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct BufferReadCtx* ctx = (struct BufferReadCtx*)userData;
+	JSONobject o = v.object;
+
+	uint32_t size = jsonObjectGet(o, "byteSize").uint;
+	
+
 
 	return true;
 }
@@ -371,6 +524,11 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 	{
 		struct AccessorReadCtx ctx = { .accessors = gltf.accessors, .bufferViews = gltf.bufferViews };
 		jsonArrayForeach(accessors, parseAccessorArrayCallback, &ctx);
+	}
+	if (animations && accessors && nodes)
+	{
+		struct AnimationReadCtx ctx = { .animations = gltf.animations, .accessors = gltf.accessors, .nodes = gltf.nodes };
+		jsonArrayForeach(animations, parseAnimationArrayCallback, &ctx);
 	}
 
 
