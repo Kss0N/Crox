@@ -36,7 +36,7 @@ typedef _Success_(return != false) bool (*JSONarray_ForeachCallback)(_In_ JSONar
 typedef _Success_(return != false) bool (*JSONobject_ForeachCallback)(_In_ JSONobject, _In_z_ const char* key, _In_ JSONtype, _In_ JSONvalue, _Inout_opt_ void* userData);
 
 
-uint32_t  jsonArrayGetSize	(_In_ JSONarray);
+uint32_t  jsonArrayGetSize	(_In_opt_ JSONarray);
 JSONtype  jsonArrayGetType	(_In_ JSONarray, _In_ uint32_t ix);
 JSONvalue jsonArrayGet		(_In_ JSONarray, _In_ uint32_t ix);
 uint32_t  jsonArrayForeach	(_In_ JSONarray, _In_ JSONarray_ForeachCallback, _Inout_opt_ void* userData);

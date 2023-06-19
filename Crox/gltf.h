@@ -195,8 +195,12 @@ struct	GLTFasset
 {
 	GLTFname copyright;
 	GLTFname generator;
-	GLTFname version;
-	GLTFname minVersion;
+	uint32_t 
+		versionMajor, 
+		versionMinor,
+
+		minVersionMajor,
+		minVersionMinor;
 };
 
 
@@ -302,13 +306,13 @@ struct GLTFgltf
 	struct GLTFaccessor			* accessors;
 	struct GLTFanimation		* animations;
 	struct GLTFbuffer			* buffers;
-	struct GLTFbufferView		* bufferView;
+	struct GLTFbufferView		* bufferViews;
 	struct GLTFcamera			* cameras;
 	struct GLTFimage			* images;
 	struct GLTFmaterial			* materials;
-	struct GLTFmesh				* mesh;
+	struct GLTFmesh				* meshes;
 	struct GLTFnode				* nodes;
-	struct GLTFsampler			* sampler;
+	struct GLTFsampler			* samplers;
 	struct GLTFscene			* scenes;
 	struct GLTFskin				* skins;
 	struct GLTFtexture			* textures;

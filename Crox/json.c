@@ -437,9 +437,9 @@ static JSONobject getObject(_In_ JSONobject o, const char* key)
 // -=-=-=- PUBLIC API -=-=-=-
 //
 
-uint32_t  jsonArrayGetSize	(_In_ JSONarray a)
+uint32_t  jsonArrayGetSize	(_In_opt_ JSONarray a)
 {
-	return (uint32_t) a->value.v.uint;
+	return a == NULL ? 0 : (uint32_t) a->value.v.uint;
 }
 JSONtype  jsonArrayGetType	(_In_ JSONarray a, _In_ uint32_t ix)
 {
