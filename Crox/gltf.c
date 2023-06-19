@@ -18,7 +18,6 @@ char* copyStringHeap(const char* str)
 	return dst;
 }
 
-
 struct StringArrayReadCtx
 {
 	uint32_t unused;
@@ -35,6 +34,89 @@ _Success_(return != false) bool parseStringArrayCallback(_In_ JSONarray a, _In_ 
 	return true;
 }
 
+static enum GLTFaccessor_type parseAccessorType(_In_z_ const char* type)
+{
+	return
+		strcmp(type,"SCALAR")== 0 ? GLTFaccessor_type_SCALAR :
+
+		strcmp(type, "VEC2") == 0 ? GLTFaccessor_type_VEC2 :
+		strcmp(type, "VEC3") == 0 ? GLTFaccessor_type_VEC3 :
+		strcmp(type, "VEC4") == 0 ? GLTFaccessor_type_VEC4 :
+
+		strcmp(type, "MAT2") == 0 ? GLTFaccessor_type_MAT2 :
+		strcmp(type, "MAT3") == 0 ? GLTFaccessor_type_MAT3 :
+		strcmp(type, "MAT4") == 0 ? GLTFaccessor_type_MAT4 :
+
+		GLTFaccessor_type_SCALAR;
+}
+static void parseAccessorMinMax(_In_ uint32_t count, _Out_writes_(min(count, 16)) union GLTFaccessor_minmax* minmax, _In_opt_ JSONarray a, GLenum ctype)
+{
+	if (!a) return;
+	for (int i = 0; i < count; i++)
+	{
+		int32_t integral = jsonArrayGet(a, i).integer; //will give nonsensical answer if type is Float
+
+		if (ctype == GL_FLOAT)
+		{
+			minmax[i].f32 = (float)jsonArrayGet(a, i).number;
+		}
+		else switch (ctype)
+		{
+		case GL_UNSIGNED_BYTE:
+			minmax[i].u8 = (uint8_t)integral;
+			break;
+		case GL_BYTE:
+			minmax[i].i8 = (int8_t)integral;
+			break;
+		case GL_UNSIGNED_SHORT:
+			minmax[i].u16 = (uint16_t)integral;
+			break;
+		case GL_SHORT:
+			minmax[i].i16 = (int16_t)integral;
+			break;
+		case GL_UNSIGNED_INT:
+			minmax[i].u32 = (uint32_t)integral;
+			break;
+		case GL_INT:
+			minmax[i].i32 = (uint32_t)integral;
+			break;
+		default:
+			break;
+		}
+
+	}
+
+
+}
+static struct GLTFaccessor_sparse parseAccessorSparse(_In_opt_ JSONobject o, _In_ const struct GLTFbufferView* bufferViews)
+{
+	if (!o) return (struct GLTFaccessor_sparse) { .count = 0 }; //0 means its invalid
+	uint32_t count = jsonObjectGet(o, "count").uint;
+	JSONobject 
+		indices = jsonObjectGet(o, "indices").object,
+		 values = jsonObjectGet(o, "values").object;
+	assert(indices && values);
+
+	struct GLTFbufferView
+		* indices_bw = bufferViews + jsonObjectGet(indices, "bufferView").uint,
+		*  values_bw = bufferViews + jsonObjectGet( values, "bufferView").uint;
+	uint32_t
+		indices_offset = jsonObjectGetOrElse(indices, "byteOffset", JVU(uint = 0)).uint,
+		 values_offset = jsonObjectGetOrElse( values, "byteOffset", JVU(uint = 0)).uint;
+	
+	return (struct GLTFaccessor_sparse) 
+	{
+		.count = count,
+			.indices_bufferView = indices_bw,
+			.values_bufferView = values_bw,
+			
+			.indices_byteOffset = indices_offset,
+			.values_bufferView = values_offset,
+
+			.indices_componentType = (GLenum)jsonObjectGet(indices, "componentType").uint,
+	};
+}
+
 
 struct AccessorReadCtx
 {
@@ -45,7 +127,21 @@ struct AccessorReadCtx
 _Success_(return != false) bool parseAccessorArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct AccessorReadCtx* ctx = (struct AccessorReadCtx*)userData;
+	JSONobject o = v.object;
 
+
+	struct GLTFaccessor acc = {
+		.bufferView = ctx->bufferViews + jsonObjectGetOrElse(o,"bufferView", JVU(uint = 0)).uint,
+		.byteOffset = jsonObjectGetOrElse(o, "byteOffset", JVU(uint = 0)).uint,
+		.componenType = jsonObjectGet(o, "componentType").uint,
+		.normalized = jsonObjectGetOrElse(o, "normalized", JVU(boolean = false)).boolean,
+		.count = jsonObjectGet(o, "count").uint,
+		.type = parseAccessorType(jsonObjectGet(o, "type").string),
+		.sparse = parseAccessorSparse(jsonObjectGetOrElse(o, "sparse", JVU(object = NULL)).object, ctx->bufferViews),
+	};
+	uint32_t minmaxC = _gltfAccessorTypeComponentCount(acc.type);
+	parseAccessorMinMax(minmaxC, acc.max, jsonObjectGetOrElse(o, "max", JVU(array = NULL)).array, acc.componenType);
+	parseAccessorMinMax(minmaxC, acc.min, jsonObjectGetOrElse(o, "min", JVU(array = NULL)).array, acc.componenType);
 
 	return true;
 }
@@ -92,6 +188,7 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 		.scene = NULL,
 
 	};
+
 
 	if (isGLB)
 	{
@@ -270,7 +367,11 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 	if (extensionsRequired)
 		jsonArrayForeach(extensionsRequired, parseStringArrayCallback, gltf.extensionsRequired);
 
-
+	if (accessors && bufferViews)
+	{
+		struct AccessorReadCtx ctx = { .accessors = gltf.accessors, .bufferViews = gltf.bufferViews };
+		jsonArrayForeach(accessors, parseAccessorArrayCallback, &ctx);
+	}
 
 
 	

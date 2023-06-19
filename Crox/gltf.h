@@ -154,6 +154,38 @@ enum   GLTFaccessor_type
 	GLTFaccessor_type_MAT3,
 	GLTFaccessor_type_MAT4,
 };
+inline bool		_gltfAccessorHasValidSparse(_In_ struct GLTFaccessor* a)
+{
+	return a->sparse.count != 0;
+}
+inline uint32_t _gltfAccessorTypeComponentCount(_In_ enum GLTFaccessor_type type)
+{
+	switch (type)
+	{
+	case GLTFaccessor_type_SCALAR:  return 1;
+	case GLTFaccessor_type_VEC2:	return 2;
+	case GLTFaccessor_type_VEC3:    return 3;
+	case GLTFaccessor_type_VEC4:
+	case GLTFaccessor_type_MAT2:	return 4;
+	case GLTFaccessor_type_MAT3:	return 9;
+	case GLTFaccessor_type_MAT4:	return 16;
+
+	default:						return 0;
+	}
+}
+inline uint32_t _gltfComponentByteSize(_In_ GLenum type)
+{
+	switch (type)
+	{
+	case GL_UNSIGNED_BYTE:	case GL_BYTE:	return sizeof(char);
+	case GL_UNSIGNED_SHORT: case GL_SHORT:	return sizeof(short);
+	case GL_UNSIGNED_INT:	case GL_INT:	return sizeof(int);
+
+	case GL_FLOAT: return sizeof(float);
+
+	default: return 0;
+	}
+}
 
 
 struct GLTFanimation
