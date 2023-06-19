@@ -35,7 +35,7 @@ static _Success_(return != false) bool parseStringArrayCallback(_In_ JSONarray a
 }
 
 
-
+#pragma region Accessor
 
 static enum GLTFaccessor_type parseAccessorType(_In_z_ const char* type)
 {
@@ -152,8 +152,16 @@ static _Success_(return != false) bool parseAccessorArrayCallback(_In_ JSONarray
 	return true;
 }
 
+static void destroyAccessor(struct GLTFaccessor* pAccessor)
+{
+	if (pAccessor->name)
+		free(pAccessor->name);
+}
+
+#pragma endregion
 
 
+#pragma region Animation
 
 static enum GLTFanimation_sampler_interpolation animationSamplerInterpolationFromString(_In_z_ const char* i)
 {
@@ -278,28 +286,62 @@ static _Success_(return != false) bool parseAnimationArrayCallback(_In_ JSONarra
 	return true;
 }
 
+static void destroyAnimation(struct GLTFanimation* pAnimation)
+{
+	arrfree(pAnimation->channels);
+	arrfree(pAnimation->samplers);
+
+	if (pAnimation->name)
+		free(pAnimation->name);
+}
+
+#pragma endregion
 
 
+#pragma region Buffer
 
 struct BufferReadCtx {
 	struct GLTFbuffer* buffers;
 
 	bool isGLB;
-	void* data;
+	void* glb;
 };
 static _Success_(return != false) bool parseBufferArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct BufferReadCtx* ctx = (struct BufferReadCtx*)userData;
 	JSONobject o = v.object;
 
-	uint32_t size = jsonObjectGet(o, "byteSize").uint;
-	
-
+	struct GLTFbuffer b = {
+		.byteLength = jsonObjectGet(o, "byteSize").uint,
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", JVU(string = NULL)).string)
+	};
+	if (ix == 0 && ctx->isGLB)
+	{
+		b.data = ctx->glb;
+	}
+	else
+	{
+		b.uri = copyStringHeap(jsonObjectGet(o, "uri", JVU(string = NULL)).string);
+	}
 
 	return true;
 }
 
+static void destroyBuffer(struct GLTFbuffer* b)
+{
+	if (b->name)
+		free(b->name);
+	
+	if (b->uri)
+		free(b->uri);
+}
 
+#pragma endregion
+
+
+#pragma region BufferView
+
+#pragma endregion
 
 
 ;
@@ -530,6 +572,11 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 		struct AnimationReadCtx ctx = { .animations = gltf.animations, .accessors = gltf.accessors, .nodes = gltf.nodes };
 		jsonArrayForeach(animations, parseAnimationArrayCallback, &ctx);
 	}
+	if (buffers)
+	{
+		struct BufferReadCtx ctx = { .buffers = gltf.buffers, .isGLB = isGLB, .glb = glbData };
+		jsonArrayForeach(buffers, parseBufferArrayCallback, &ctx);
+	}
 
 
 	
@@ -544,4 +591,55 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 extern void gltfClear(_In_ struct GLTFgltf* gltf)
 {
 
+}
+
+extern void* gltfDataUriToBuffer(_In_z_ const char* data)
+{
+	GLTFname
+		DATA_PFX = "data:",
+		MIME_TYPE = "application",
+		SUBTYPE_ALT1 = "octet-stream",
+		SUBTYPE_ALT2 = "gltf-buffer",
+		ENCODING = "base64"
+		;
+
+	// either
+	//"data:application/octet-stream";
+	// or
+	//"data:application/gltf-buffer";
+
+	char* it = data;
+
+	assert(strncmp(it, DATA_PFX, strlen(DATA_PFX)) == 0);
+	it += strlen(DATA_PFX);
+
+	assert(strncmp(it, MIME_TYPE, strlen(MIME_TYPE)) == 0);
+	it += strlen(MIME_TYPE);
+
+	assert(*it == '/');
+	it++;
+
+	if (strncmp(it, SUBTYPE_ALT1, strlen(SUBTYPE_ALT1)) == 0)
+	{
+		it += strlen(SUBTYPE_ALT1);
+	}
+	else if (strncmp(it, SUBTYPE_ALT2, strlen(SUBTYPE_ALT2)) == 0)
+	{
+		it += strlen(SUBTYPE_ALT2);
+	}
+	else __debugbreak();
+
+	assert(*it == ';');
+	it++;
+
+	assert(strncmp(it, ENCODING, strlen(ENCODING)) == 0);
+	it += strlen(ENCODING);
+
+	assert(*it == ',');
+	it++;
+
+	//TODO
+	// see https://en.wikipedia.org/wiki/Base64
+
+	return NULL;
 }
