@@ -2,10 +2,18 @@
 #include "gltf.h"
 #include "json.h"
 #include <stb_ds.h>
+#include <float.h>
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 #define assert(expr) if(!(expr)) __debugbreak();
 
-char* copyStringHeap(const char* str)
+inline bool XOR(bool a, bool b)
+{
+	return (a || b) && !(a && b);
+}
+
+static char* copyStringHeap(const char* str)
 {
 	if (!str) return NULL;
 
@@ -33,6 +41,64 @@ static _Success_(return != false) bool parseStringArrayCallback(_In_ JSONarray a
 
 	return true;
 }
+
+static enum GLTFmimeType mimeTypeFromString(const char* str)
+{
+	return
+		strcmp(str, "image/png") == 0 ? GLTFmimeType_IMAGE_PNG :
+		strcmp(str, "image/jpeg") == 0 ? GLTFmimeType_IMAGE_JPEG :
+		strcmp(str, "audio/mpeg") == 0 ? GLTFmimeType_AUDIO_MPEG :
+
+		GLTFmimeType_NONE;
+}
+
+
+static _Success_(return != false) bool parseVectorArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	float* vec = (float*)userData;
+
+	vec[ix] = (t == JSONtype_NUMBER) ? (float)v.number : (float)v.integer;
+
+	return true;
+}
+
+static bool parseVector(JSONarray a,  float* vector)
+{
+	return jsonArrayForeach(a, parseVectorArrayCallback, vector) != 0;
+}
+
+#define DEFAULT_TEXINFO_OFFSET {0,0}
+#define DEFAULT_TEXINFO_ROTATION 0
+#define DEFAULT_TEXINFO_SCALE {1,1}
+
+#define DEFAULT_TEXCOORD 0
+
+static struct GLTFtextureInfo parseTextureInfo(JSONobject o, const struct GLTFtexture* textures)
+{
+	JSONobject
+		exts = o ? jsonObjectGetOrElse(o, "extensions", _JVU(NULL)).object : NULL,
+		KHR_texture_transform = exts ? jsonObjectGetOrElse(o, "KHR_texture_transform", _JVU(NULL)).object : NULL;
+
+	struct GLTFtextureInfo info =
+	{
+		.texture = o ? textures + jsonObjectGet(o, "index").uint : NULL,
+		.texCoord= o ? jsonObjectGetOrElse(o, "texCoord", _JVU(DEFAULT_TEXCOORD)).uint : DEFAULT_TEXCOORD,
+
+		.offset = DEFAULT_TEXINFO_OFFSET,
+		
+		.rotation = KHR_texture_transform ? jsonObjectGetOrElse(KHR_texture_transform, "rotation", JVU(number = DEFAULT_TEXINFO_ROTATION)).number : DEFAULT_TEXINFO_ROTATION,
+		
+		.scale = DEFAULT_TEXINFO_SCALE
+	};
+	if (KHR_texture_transform && jsonObjectGetType(KHR_texture_transform, "offset") == JSONtype_ARRAY)
+		parseVector(jsonObjectGet(KHR_texture_transform, "offset").array, info.offset);
+
+	if (KHR_texture_transform && jsonObjectGetType(KHR_texture_transform, "scale") == JSONtype_ARRAY)
+		parseVector(jsonObjectGet(KHR_texture_transform, "scale").array, info.scale);
+
+	return info;
+}
+
 
 
 #pragma region Accessor
@@ -298,6 +364,11 @@ static void destroyAnimation(struct GLTFanimation* pAnimation)
 #pragma endregion
 
 
+#pragma region Audio
+//TODO
+#pragma endregion
+
+
 #pragma region Buffer
 
 struct BufferReadCtx {
@@ -312,7 +383,7 @@ static _Success_(return != false) bool parseBufferArrayCallback(_In_ JSONarray a
 	JSONobject o = v.object;
 
 	struct GLTFbuffer b = {
-		.byteLength = jsonObjectGet(o, "byteSize").uint,
+		.byteLength = jsonObjectGet(o, "byteLength").uint,
 		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", JVU(string = NULL)).string)
 	};
 	if (ix == 0 && ctx->isGLB)
@@ -323,6 +394,8 @@ static _Success_(return != false) bool parseBufferArrayCallback(_In_ JSONarray a
 	{
 		b.uri = copyStringHeap(jsonObjectGet(o, "uri", JVU(string = NULL)).string);
 	}
+
+	ctx->buffers[ix] = b;
 
 	return true;
 }
@@ -341,7 +414,350 @@ static void destroyBuffer(struct GLTFbuffer* b)
 
 #pragma region BufferView
 
+struct BufferViewReadCtx
+{
+	struct GLTFbufferView* bufferViews;
+
+	const struct GLTFbuffer* buffers;
+};
+static _Success_(return != false) bool parseBufferViewArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct BufferViewReadCtx* ctx = (struct BufferViewReadCtx*)userData;
+	JSONobject o = v.object;
+
+	struct GLTFbufferView bw = {
+		.buffer = ctx->buffers + jsonObjectGet(o, "buffers").uint,
+		.byteOffset =  jsonObjectGetOrElse(o, "byteOffset", JVU(uint = 0)).uint,
+		.byteLength =  jsonObjectGetOrElse(o, "byteLength", JVU(uint = 0)).uint,
+		.byteStride =  jsonObjectGetOrElse(o, "byteStride", JVU(uint = 0)).uint,
+		.target =  (GLenum)jsonObjectGetOrElse(o, "target", JVU(uint = 0)).uint,
+		
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", JVU(string = 0)).string),		
+	};
+	ctx->bufferViews[ix] = bw;
+
+	return true;
+}
+static void destroyBufferView(struct GLTFbufferView* bw)
+{
+	if (bw->name)
+		free(bw->name);
+}
+
 #pragma endregion
+
+#pragma region Camera
+
+struct CameraReadCtx
+{
+	struct GLTFcamera* cameras;
+};
+static _Success_(return != false) bool parseCameraArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct CameraReadCtx* ctx = (struct CameraReadCtx*)userData;
+
+	JSONobject o = v.object,
+		perspective = jsonObjectGetOrElse(o, "perspective", _JVU(NULL)).object,
+		orthographic= jsonObjectGetOrElse(o, "orthographic",_JVU(NULL)).object;
+	assert(XOR(perspective != NULL, orthographic != NULL));
+
+	struct GLTFcamera c = {
+		.isPerspective = perspective != NULL,
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", _JVU(NULL)).string)
+	};
+
+	if (c.isPerspective)
+	{
+		c.perspective = (struct GLTFcamera_perspective){
+			.aspectRatio= jsonObjectGetOrElse(perspective, "aspectRatio",	JVU(number = NAN))	.number,
+			.yfov		= jsonObjectGet		 (perspective, "yfov")								.number,
+			.zfar		= jsonObjectGet		 (perspective, "zfar")								.number,
+			.znear		= jsonObjectGetOrElse(perspective, "znear",			JVU(number = NAN))	.number,
+		};
+	}
+	else
+		c.orthographic = (struct GLTFcamera_orthographic){
+			.xmag = jsonObjectGet(orthographic, "xmag").number,
+			.ymag = jsonObjectGet(orthographic, "ymag").number,
+			.zfar = jsonObjectGet(orthographic, "zfar").number,
+			.znear= jsonObjectGet(orthographic,"znear").number
+		};
+
+	ctx->cameras[ix] = c;
+
+	return true;
+}
+static void destroyCamera(struct GLTFcamera* c)
+{
+	if (c->name)
+		free(c->name);
+}
+
+#pragma endregion
+
+#pragma region Image
+
+struct ImageReadCtx
+{
+	struct GLTFimage* images;
+
+	const struct GLTFbufferView* bufferViews;
+};
+static _Success_(return != false) bool parseImageArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct ImageReadCtx* ctx = (struct ImageReadCtx*)userData;
+	JSONobject o = v.object;
+
+	struct GLTFimage img = {
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", _JVU(NULL)).string),
+	};
+
+	if(jsonObjectGetType(o, "uri") == JSONtype_STRING)
+	{ 
+		img.uri = copyStringHeap(jsonObjectGet(o, "uri").string);
+	}
+	else if(jsonObjectGetType(o, "bufferView") == JSONtype_INTEGER)
+	{
+		img.bufferView = ctx->bufferViews + jsonObjectGet(o, "bufferView").uint;
+		img.mimeType = mimeTypeFromString(jsonObjectGet(o, "mimeType").string);
+	}
+
+	ctx->images[ix] = img;
+	return true;
+}
+static void destroyImage(struct GLTFimage* img)
+{
+	if (img->name) 
+		free(img->name);
+	if (img->mimeType == GLTFmimeType_NONE)
+		free(img->uri);
+}
+
+#pragma endregion
+
+#pragma region Material
+
+#define DEFAULT_BASE_COLOR {1.f, 1.f, 1.f, 1.f}
+#define DEFAULT_METALLIC_FACTOR 1.f
+#define DEFAULT_ROUGHNESS_FACTOR 1.f
+#define DEFAULT_NORMAL_SCALE 1.f
+#define DEFAULT_OCCLUSION_STRENGTH 1.f
+#define DEFAULT_EMISSIVE_FACTOR {1.f, 1.f, 1.f}
+#define DEFAULT_ALPHA_CUTOFF .5f
+
+#define DEFAULT_ANISOTROPY_STRENGTH 0
+#define DEFAULT_ANISOTROPY_ROTATION 0
+
+#define DEFAULT_DIFFUSE_TRANSMISSION_COLOR_FACTOR {1, 1, 1}
+
+#define DEFAULT_EMISSIVE_STRENGTH 1
+
+#define DEFAULT_IOR 1.5
+
+#define DEFAULT_IRIDESCENCE_IOR 1.3
+#define DEFAULT_IRIDESCENCE_THICKNESS_MIN 100
+#define DEFAULT_IRIDESCENCE_THICKNESS_MAX 400
+
+#define DEFAULT_SHEEN_COLOR_FACTOR {0,0,0}
+
+#define DEFAULT_SPECULAR_FACTOR 1.f
+#define DEFAULT_SPECULAR_COLOR_FACTOR {1.f, 1.f, 1.f}
+
+#define DEFAULT_SCATTER_DISTANCE INFINITY
+#define DEFAULT_SCATTER_COLOR {0,0,0}
+
+#define DEFAULT_ATTENUATION_DISTANCE INFINITY
+#define DEFAULT_ATTENUATION_COLOR {1,1,1}
+
+
+static enum GLTFmaterial_alphaMode alphaModeFromSting(const char* str)
+{
+	return
+		strcmp(str, "OPAQUE")	== 0 ? GLTFmaterial_alphaMode_OPAQUE : 
+		strcmp(str, "MASK")		== 0 ? GLTFmaterial_alphaMode_MASK : 
+		strcmp(str, "BLEND")	== 0 ? GLTFmaterial_alphaMode_BLEND :
+		GLTFmaterial_alphaMode_max;
+}
+
+struct MaterialReadCtx
+{
+	struct GLTFmaterial* materials;
+
+	struct GLTFtexture* textures;
+};
+static _Success_(return != false) bool parseMaterialArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct MaterialReadCtx* ctx = (struct MaterialReadCtx*)userData;
+	const JSONobject o = v.object,
+		pbr = jsonObjectGetOrElse(o, "pbrMetallicRoughness",_JVU(NULL)).object,
+		 nt = jsonObjectGetOrElse(o, "normalTexture",		_JVU(NULL)).object,
+		 ot = jsonObjectGetOrElse(o, "occlusionTexture",	_JVU(NULL)).object,
+		 et = jsonObjectGetOrElse(o, "emissiveTexture",		_JVU(NULL)).object,
+		bct = pbr ? jsonObjectGetOrElse(pbr, "baseColorTexture", _JVU(NULL)).object : NULL,
+		mrt = pbr ? jsonObjectGetOrElse(pbr, "metallicRoughnessTexture", _JVU(NULL)).object : NULL,
+
+		exts = jsonObjectGetOrElse(o, "extensions",	_JVU(NULL)).object,
+		KHR_materials_anisotropy			= exts ? jsonObjectGetOrElse(exts, "KHR_materials_anisotropy",			_JVU(NULL)).object : NULL,
+		KHR_materials_clearcoat				= exts ? jsonObjectGetOrElse(exts, "KHR_materials_clearcoat",			_JVU(NULL)).object : NULL,
+		KHR_materials_diffuse_transmission	= exts ? jsonObjectGetOrElse(exts, "KHR_materials_diffuse_transmission",_JVU(NULL)).object : NULL,
+		KHR_materials_emissive_strength		= exts ? jsonObjectGetOrElse(exts, "KHR_materials_emissive_strength",	_JVU(NULL)).object : NULL,
+		KHR_materials_ior					= exts ? jsonObjectGetOrElse(exts, "KHR_materials_ior",					_JVU(NULL)).object : NULL,
+		KHR_materials_iridescence			= exts ? jsonObjectGetOrElse(exts, "KHR_materials_iridescence",			_JVU(NULL)).object : NULL,
+		KHR_materials_sheen					= exts ? jsonObjectGetOrElse(exts, "KHR_materials_sheen",				_JVU(NULL)).object : NULL,
+		KHR_materials_specular				= exts ? jsonObjectGetOrElse(exts, "KHR_materials_specular",			_JVU(NULL)).object : NULL,
+		KHR_materials_sss					= exts ? jsonObjectGetOrElse(exts, "KHR_materials_sss",					_JVU(NULL)).object : NULL,
+		KHR_materials_transmission			= exts ? jsonObjectGetOrElse(exts, "KHR_materials_transmission",		_JVU(NULL)).object : NULL,
+		KHR_materials_unlit					= exts ? jsonObjectGetOrElse(exts, "KHR_materials_unlit",				_JVU(NULL)).object : NULL,
+		KHR_materials_volume				= exts ? jsonObjectGetOrElse(exts, "KHR_materials_volume",				_JVU(NULL)).object : NULL,
+		//some more textures
+		 at = KHR_materials_anisotropy ? jsonObjectGetOrElse(KHR_materials_anisotropy, "anisotropyTexture",			_JVU(NULL)).object : NULL,
+		 ct = KHR_materials_clearcoat ? jsonObjectGetOrElse(KHR_materials_clearcoat, "clearcoatTexture",			_JVU(NULL)).object : NULL,
+		crt = KHR_materials_clearcoat ? jsonObjectGetOrElse(KHR_materials_clearcoat, "clearcoatRoughnessTexture",	_JVU(NULL)).object : NULL,
+		cnt = KHR_materials_clearcoat ? jsonObjectGetOrElse(KHR_materials_clearcoat, "clearcoatNormalTexture",		_JVU(NULL)).object : NULL,
+		dtt = KHR_materials_diffuse_transmission ? jsonObjectGetOrElse(KHR_materials_diffuse_transmission, "diffuseTransmissionTexture", _JVU(NULL)).object : NULL,
+		dtct= KHR_materials_diffuse_transmission ? jsonObjectGetOrElse(KHR_materials_diffuse_transmission, "diffuseTransmissionColorTexture", _JVU(NULL)).object : NULL,
+		 it = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceTexture", _JVU(NULL)).object : NULL,
+		itt = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceThicknessTexture", _JVU(NULL)).object : NULL,
+		sct = KHR_materials_sheen ? jsonObjectGetOrElse(KHR_materials_sheen, "sheenColorTexture", _JVU(NULL)).object : NULL,
+		srt = KHR_materials_sheen ? jsonObjectGetOrElse(KHR_materials_sheen, "sheenRoughnessTexture", _JVU(NULL)).object : NULL,
+		spt = KHR_materials_specular ? jsonObjectGetOrElse(KHR_materials_specular, "specularTexture", _JVU(NULL)).object : NULL,
+		spct= KHR_materials_specular ? jsonObjectGetOrElse(KHR_materials_specular, "specularColorTexture", _JVU(NULL)).object : NULL,
+		tmt = KHR_materials_transmission ? jsonObjectGetOrElse(KHR_materials_transmission, "transmissionTexture", _JVU(NULL)).object : NULL,
+		 tt = KHR_materials_transmission ? jsonObjectGetOrElse(KHR_materials_volume, "thicknessTexture", _JVU(NULL)).object : NULL
+		;
+	
+
+
+	const struct GLTFtextureInfo DEFAULT_TEXTURE_INFO = parseTextureInfo(NULL, NULL);
+
+	struct GLTFmaterial m = {
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", _JVU(NULL)).string),
+
+		.baseColorFactor = DEFAULT_BASE_COLOR,
+		.metallicFactor = pbr ? jsonObjectGetOrElse(pbr, "metallicFactor", JVU(number = DEFAULT_METALLIC_FACTOR)).number : 0,
+		.roughnessFactor = pbr ? jsonObjectGetOrElse(pbr,"roughnessFactor", JVU(number = DEFAULT_ROUGHNESS_FACTOR)).number : 0,
+		.normalScale = nt ? jsonObjectGetOrElse(nt, "scale", JVU(number = DEFAULT_NORMAL_SCALE)).number : 0,
+		.occlusionStrength = ot ? jsonObjectGetOrElse(ot, "strength", JVU(number = DEFAULT_OCCLUSION_STRENGTH)).number : 0,
+		.emissiveFactor = DEFAULT_EMISSIVE_FACTOR,
+		.alphaCutoff = jsonObjectGetOrElse(o, "alphaCutoff", JVU(number = DEFAULT_ALPHA_CUTOFF)).number,
+
+		.anisotropyStrength = KHR_materials_anisotropy ? jsonObjectGetOrElse(KHR_materials_anisotropy, "anisotropyStrength", JVU(number = DEFAULT_ANISOTROPY_STRENGTH)).number : DEFAULT_ANISOTROPY_STRENGTH,
+		.anisotropyRotation = KHR_materials_anisotropy ? jsonObjectGetOrElse(KHR_materials_anisotropy, "anisotropyRotation", JVU(number = DEFAULT_ANISOTROPY_ROTATION)).number : DEFAULT_ANISOTROPY_ROTATION,
+
+		.clearcoatFactor = KHR_materials_clearcoat ? jsonObjectGetOrElse(KHR_materials_clearcoat, "clearcoatFactor", _JVU(0)).number : 0,
+		.clearcoatRoughnessFactor = KHR_materials_clearcoat ? jsonObjectGetOrElse(KHR_materials_clearcoat, "clearcoatRoughnessFactor", _JVU(0)).number : 0,
+		.clearcoatNormalScale = cnt ? jsonObjectGetOrElse(cnt, "scale", JVU(number = DEFAULT_NORMAL_SCALE)).number : DEFAULT_NORMAL_SCALE,
+
+		.diffuseTransmissionFactor = KHR_materials_diffuse_transmission ? jsonObjectGetOrElse(KHR_materials_diffuse_transmission, "diffuseTransmissionFactor", _JVU(0)).number : 0,
+		.diffuseTransmissionColorFactor = DEFAULT_DIFFUSE_TRANSMISSION_COLOR_FACTOR,
+
+		.emissiveStrength = KHR_materials_emissive_strength ? jsonObjectGetOrElse(KHR_materials_emissive_strength, "emissiveStrength", JVU(number = DEFAULT_EMISSIVE_STRENGTH)).number : DEFAULT_EMISSIVE_STRENGTH,
+
+		.ior = KHR_materials_ior ? jsonObjectGetOrElse(KHR_materials_ior, "ior", JVU(number = DEFAULT_IOR)).number : DEFAULT_IOR,
+
+		.iridescenceFactor = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceFactor", _JVU(0)).number : 0,
+		.iridescenceIor = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceIor", JVU(number = DEFAULT_IRIDESCENCE_IOR)).number : DEFAULT_IRIDESCENCE_IOR,
+		.iridescenceThicknessMinimum = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceThicknessMinimum", JVU(number = DEFAULT_IRIDESCENCE_THICKNESS_MIN)).number : DEFAULT_IRIDESCENCE_THICKNESS_MIN,
+		.iridescenceThicknessMaximum = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceThicknessMaximum", JVU(number = DEFAULT_IRIDESCENCE_THICKNESS_MAX)).number : DEFAULT_IRIDESCENCE_THICKNESS_MAX,
+
+		.sheenColorFactor = DEFAULT_SHEEN_COLOR_FACTOR,
+		.sheenRoughnessFactor = KHR_materials_sheen ? jsonObjectGetOrElse(KHR_materials_sheen, "sheenRoughnessFactor", _JVU(0)).number : 0,
+
+		.specularFactor = KHR_materials_specular ? jsonObjectGetOrElse(KHR_materials_specular, "specularFactor", JVU(number = DEFAULT_SPECULAR_FACTOR)).number : DEFAULT_SPECULAR_FACTOR,
+		.specularColorFactor = DEFAULT_SPECULAR_COLOR_FACTOR,
+
+		.scatterDistance = KHR_materials_sss ? jsonObjectGetOrElse(KHR_materials_sss, "scatterDistance", JVU(number = DEFAULT_SCATTER_DISTANCE)).number : DEFAULT_SCATTER_DISTANCE,
+		.scatterColor = DEFAULT_SCATTER_COLOR,
+
+		.transmissionFactor = KHR_materials_transmission ? jsonObjectGetOrElse(KHR_materials_transmission, "transmissionFactor", _JVU(0)).number : 0,
+
+		.thicknessFactor = KHR_materials_volume ? jsonObjectGetOrElse(KHR_materials_volume, "thicknessFactor", _JVU(0)).number : 0,
+		.attenuationDistance = KHR_materials_volume ? jsonObjectGetOrElse(KHR_materials_volume, "attenuationDistance", JVU(number = DEFAULT_ATTENUATION_DISTANCE)).number : DEFAULT_ATTENUATION_DISTANCE,
+		.attenuationColor = DEFAULT_ATTENUATION_COLOR,
+
+
+		.alphaMode			= alphaModeFromSting(jsonObjectGetOrElse(o, "alphaMode", _JVU("OPAQUE")).string),
+		.doubleSided = jsonObjectGetOrElse(o, "doubleSided", _JVU(false)).boolean,
+		.unlit = KHR_materials_unlit != NULL,
+
+		.baseColorTexture		=bct ? parseTextureInfo(bct, ctx->textures) : DEFAULT_TEXTURE_INFO,
+		.metallicRoughnessFactor=mrt ? parseTextureInfo(mrt, ctx->textures) : DEFAULT_TEXTURE_INFO,
+		.normalTexture			= nt ? parseTextureInfo( nt, ctx->textures) : DEFAULT_TEXTURE_INFO,
+		.occlusionTexture		= ot ? parseTextureInfo( ot, ctx->textures) : DEFAULT_TEXTURE_INFO,
+		.emissiveTexture		= et ? parseTextureInfo( et, ctx->textures) : DEFAULT_TEXTURE_INFO,
+		
+		.anisotropyTexture		= at ? parseTextureInfo( at, ctx->textures) : DEFAULT_TEXTURE_INFO,
+		
+		.clearcoatTexture		= ct ? parseTextureInfo( ct, ctx->textures) : DEFAULT_TEXTURE_INFO,
+		.clearcoatRoughnessTexture=crt?parseTextureInfo(crt, ctx->textures) : DEFAULT_TEXTURE_INFO,
+		.clearcoatNormalTexture	=cnt ? parseTextureInfo(cnt, ctx->textures) : DEFAULT_TEXTURE_INFO,
+		
+		.diffuseTransmissionTexture=dtt?parseTextureInfo(dtt,ctx->textures) : DEFAULT_TEXTURE_INFO,
+		.diffuseTransmissionColorTexture=dtct?parseTextureInfo(dtct,ctx->textures):DEFAULT_TEXTURE_INFO,
+
+		.iridescenceTexture		= it ? parseTextureInfo(it, ctx->textures) : DEFAULT_TEXTURE_INFO,
+		.iridescenceThicknessTexture=itt?parseTextureInfo(itt,ctx->textures):DEFAULT_TEXTURE_INFO,
+
+		.sheenColorTexture		= sct? parseTextureInfo(sct,ctx->textures) : DEFAULT_TEXTURE_INFO,
+		.sheenRoughnessTexture	= srt? parseTextureInfo(srt,ctx->textures) : DEFAULT_TEXTURE_INFO,
+
+		.specularTexture	  =   spt? parseTextureInfo(spt, ctx->textures):DEFAULT_TEXTURE_INFO,
+		.specularColorTexture =  spct? parseTextureInfo(spct,ctx->textures):DEFAULT_TEXTURE_INFO,
+
+		.transmissionTexture  =	 tmt ? parseTextureInfo(tmt, ctx->textures) : DEFAULT_TEXTURE_INFO,
+
+		.thicknessTexture	   = tt	 ? parseTextureInfo(tt, ctx->textures) : DEFAULT_TEXTURE_INFO,
+	};
+	if (jsonObjectGetType(pbr, "baseColorFactor") == JSONtype_ARRAY)
+	{
+		parseVector(jsonObjectGet(pbr, "baseColorFactor").array, m.baseColorFactor);
+	}
+	if (jsonObjectGetType(o, "emissiveFactor") == JSONtype_ARRAY)
+	{
+		parseVector(jsonObjectGet(o, "emissiveFactor").array, m.emissiveFactor);
+	}
+	if (jsonObjectGetType(KHR_materials_diffuse_transmission, "diffuseTransmissionColorFactor") == JSONtype_ARRAY)
+	{
+		parseVector(jsonObjectGet(KHR_materials_diffuse_transmission, "diffuseTransmissionColorFactor").array, m.diffuseTransmissionColorFactor);
+	}
+	if (jsonObjectGetType(KHR_materials_sheen, "sheenColorFactor") == JSONtype_ARRAY)
+	{
+		parseVector(jsonObjectGet(KHR_materials_sheen, "sheenColorFactor").array, m.sheenColorFactor);
+	}
+	if (jsonObjectGetType(KHR_materials_specular, "specularColorFactor") == JSONtype_ARRAY)
+	{
+		parseVector(jsonObjectGet(KHR_materials_specular, "specularColorFactor").array, m.specularColorFactor);
+	}
+	if (jsonObjectGetType(KHR_materials_sss, "scatterColor") == JSONtype_ARRAY)
+	{
+		parseVector(jsonObjectGet(KHR_materials_sss, "scatterColor").array, m.scatterColor);
+	}
+	if (jsonObjectGetType(KHR_materials_volume, "attenuationColor") == JSONtype_ARRAY)
+	{
+		parseVector(jsonObjectGet(KHR_materials_volume, "attenuationColor").array, m.attenuationColor);
+	}
+
+
+	ctx->materials[ix] = m;
+	return true;
+}
+void destroyMaterial(struct GLTFmaterial* mtl)
+{
+	if (mtl->name)
+		free(mtl->name);
+}
+#pragma endregion
+
+#pragma region Mesh
+
+struct MeshReadCtx
+{
+	struct GLTFmesh* meshes;
+
+};
+
+#pragma endregion
+
 
 
 ;
@@ -577,8 +993,26 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 		struct BufferReadCtx ctx = { .buffers = gltf.buffers, .isGLB = isGLB, .glb = glbData };
 		jsonArrayForeach(buffers, parseBufferArrayCallback, &ctx);
 	}
-
-
+	if (bufferViews && buffers)
+	{
+		struct BufferViewReadCtx ctx = { .bufferViews = gltf.bufferViews, .buffers = gltf.buffers };
+		jsonArrayForeach(bufferViews, parseBufferViewArrayCallback, &ctx);
+	}
+	if (cameras)
+	{
+		struct CameraReadCtx ctx = { .cameras = gltf.cameras };
+		jsonArrayForeach(cameras, parseCameraArrayCallback, &ctx);
+	}
+	if (images)
+	{
+		struct ImageReadCtx ctx = { .images = gltf.images, .bufferViews = gltf.bufferViews };
+		jsonArrayForeach(images, parseImageArrayCallback, &ctx);
+	}
+	if (materials)
+	{
+		struct MaterialReadCtx ctx = { .materials = gltf.materials, .textures = gltf.textures };
+		jsonArrayForeach(materials, parseMaterialArrayCallback, &ctx);
+	}
 	
 
 	

@@ -31,6 +31,7 @@ typedef enum _JSONtype
 JSONtype;
 
 #define JVU(x) (JSONvalue){.x}
+#define _JVU(x) (JSONvalue){x} //quicker, but will be incorrect if type is number because it's 64bit IEEE 754 while everything else is simply either a pointer, which is just encoded as a 64 bit integral value or a plain integral value  
 
 typedef _Success_(return != false) bool (*JSONarray_ForeachCallback)(_In_ JSONarray, _In_ uint32_t ix, _In_ JSONtype, _In_ JSONvalue, _Inout_opt_ void* userData);
 typedef _Success_(return != false) bool (*JSONobject_ForeachCallback)(_In_ JSONobject, _In_z_ const char* key, _In_ JSONtype, _In_ JSONvalue, _Inout_opt_ void* userData);

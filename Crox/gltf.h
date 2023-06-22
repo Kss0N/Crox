@@ -331,6 +331,7 @@ struct GLTFcamera
 		struct GLTFcamera_perspective  perspective;
 	};
 	bool isPerspective;
+	GLTFname name;
 };
 
 
@@ -367,7 +368,7 @@ struct GLTFimage
 {
 	union {
 		GLTFname uri;
-		const struct GLTFbufferView bufferView;
+		const struct GLTFbufferView* bufferView;
 	};
 	enum GLTFmimeType mimeType;
 	GLTFname name;
@@ -422,8 +423,8 @@ struct GLTFmaterial
 		attenuationColor[3]
 		;
 
-	bool doubleSided;
 	enum GLTFmaterial_alphaMode alphaMode;
+	bool doubleSided;
 	bool unlit;
 
 	struct GLTFtextureInfo
@@ -461,6 +462,8 @@ enum   GLTFmaterial_alphaMode
 	GLTFmaterial_alphaMode_OPAQUE,
 	GLTFmaterial_alphaMode_MASK,
 	GLTFmaterial_alphaMode_BLEND,
+
+	GLTFmaterial_alphaMode_max,
 };
 
 
