@@ -61,7 +61,7 @@ enum   GLTFmaterial_alphaMode;
 struct GLTFmesh;
 struct GLTFmesh_primitive;
 struct GLTFmesh_primitive_attributesKV;
-struct GLTFmesh_primitive_targetsKV;
+struct GLTFmesh_primitive_targetKV;
 struct GLTFmesh_primitive_compressionDataKHR;
 struct GLTFmesh_primitive_variantMappingsKHR;
 
@@ -484,7 +484,7 @@ struct GLTFmesh_primitive
 	struct GLTFmesh_primitive_attributesKV* attributes;
 	const struct GLTFaccessor* indices;
 	const struct GLTFmaterial* material;
-	struct GLTFmesh_primitive_targetsKV* targets;
+	struct GLTFmesh_primitive_targetKV** targets;
 	GLenum mode;
 
 	struct GLTFmesh_primitive_compressionDataKHR compressionData;
@@ -494,7 +494,7 @@ struct GLTFmesh_primitive_attributesKV
 	char* key;
 	const struct GLTFaccessor* value;
 };
-struct GLTFmesh_primitive_targetsKV
+struct GLTFmesh_primitive_targetKV
 {
 	char* key;
 	const struct GLTFaccessor* value;

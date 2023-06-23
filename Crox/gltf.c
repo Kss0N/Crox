@@ -21,7 +21,7 @@ static char* copyStringHeap(const char* str)
 	if (dst)
 	{
 		dst[strlen(str)] = '\0';
-		strcpy(dst, str);
+		strcpy_s(dst, strlen(str)+1, str);
 	}
 	return dst;
 }
@@ -750,11 +750,197 @@ void destroyMaterial(struct GLTFmaterial* mtl)
 
 #pragma region Mesh
 
+struct MeshPrimitiveAttributeReadCtx
+{
+	struct GLTFmesh_primitive_attributesKV* attributes;
+	
+	const struct GLTFaccessor* accessors;
+};
+static _Success_(return != false) bool parseMeshPrimitiveAttributeTableCallback(_In_ JSONobject o, _In_z_ const char* key, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct MeshPrimitiveAttributeReadCtx* ctx = (struct MeshPrimitiveAttributeReadCtx*)userData;
+	assert(ctx);
+
+	if (t != JSONtype_INTEGER) return false;
+
+	shput(ctx->attributes, key, ctx->accessors + v.uint);
+
+	return true;
+}
+
+
+struct MeshPrimitiveTargetReadCtx
+{
+	struct GLTFmesh_primitive_targetKV* target;
+
+	const struct GLTFaccessor* accessors;
+};
+static _Success_(return != false) bool parseMeshPrimitiveMorphTargetCallback(_In_ JSONobject o, _In_z_ const char* key, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct MeshPrimitiveTargetReadCtx* ctx = (struct MeshPrimitiveTargetReadCtx*)userData;
+	assert(ctx);
+	if (t != JSONtype_INTEGER) return false;
+
+	shput(ctx->target, key, ctx->accessors + v.uint);
+	return true;
+}
+
+
+struct MeshPrimitiveTargetArrayReadCtx
+{
+	struct GLTFmesh_primitive_targetKV** targets;
+
+	const struct GLTFaccessor* accessors;
+};
+static _Success_(return != false) bool parseMeshPrimitiveMorphTargetArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct MeshPrimitiveTargetArrayReadCtx* ctx = (struct MeshPrimitiveTargetArrayReadCtx*)userData;
+	assert(ctx);
+	JSONobject o = v.object;
+
+	struct GLTFmesh_primitive_targetKV* target = NULL;
+	sh_new_strdup(target);
+
+	struct MeshPrimitiveTargetReadCtx tCtx = { .target = target, .accessors = ctx->accessors };
+	bool success = jsonObjectForeach(o, parseMeshPrimitiveMorphTargetCallback, &tCtx);
+	if (success)
+		ctx->targets[ix] = target;
+	return success;
+}
+
+
+struct MeshPrimitiveReadCtx
+{
+	struct GLTFmesh_primitive* primitives;
+
+	const struct GLTFaccessor	* accessors;
+	const struct GLTFbufferView	* bufferViews;
+	const struct GLTFmaterial	* materials;
+};
+static _Success_(return != false) bool parseMeshPrimitveArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct MeshPrimitiveReadCtx* ctx = (struct MeshPrimitiveReadCtx*)userData;
+	assert(ctx);
+	JSONobject o = v.object,
+		exts = jsonObjectGetOrElse(o, "extensions", _JVU(NULL)).object,
+		KHR_draco_mesh_compression = exts ? jsonObjectGetOrElse(exts, "KHR_draco_mesh_compression", _JVU(NULL)).object : NULL;
+		;
+
+	struct GLTFmesh_primitive p =
+	{
+		.attributes = NULL,
+		.indices = jsonObjectGetType(o, "indices") == JSONtype_INTEGER ? ctx->accessors + jsonObjectGet(o, "indices").uint : NULL,
+		.material= jsonObjectGetType(o, "material")== JSONtype_INTEGER ? ctx->materials + jsonObjectGet(o, "materials").uint : NULL,
+		.targets = NULL,
+		.mode = (GLenum)jsonObjectGetOrElse(o, "mode", _JVU(GL_TRIANGLES)).uint, 
+		.compressionData = {
+			.bufferView = KHR_draco_mesh_compression && jsonObjectGetType(KHR_draco_mesh_compression, "bufferView") == JSONtype_INTEGER ? ctx->bufferViews + jsonObjectGet(KHR_draco_mesh_compression, "bufferView").uint : NULL,
+			.attributes = NULL,
+
+		},
+	};
+
+	if (jsonObjectGetType(o, "attributes") == JSONtype_OBJECT)
+	{
+		sh_new_strdup(p.attributes);
+		struct MeshPrimitiveAttributeReadCtx attribCtx = { .attributes = p.attributes, .accessors = ctx->accessors };
+		bool success = jsonObjectForeach(jsonObjectGet(o, "attributes").object, parseMeshPrimitiveAttributeTableCallback, &attribCtx);
+
+		if (!success) 
+			return false;
+	}
+
+	JSONarray targets = jsonObjectGetOrElse(o, "targets", _JVU(NULL)).array;
+	if (targets)
+	{
+		arrsetlen(p.targets, jsonArrayGetSize(targets));
+		struct MeshPrimitiveTargetArrayReadCtx targetCtx = { .targets = p.targets, .accessors = ctx->accessors };
+		bool success = jsonArrayForeach(targets, parseMeshPrimitiveMorphTargetArrayCallback, &targetCtx);
+		
+		if (!success)
+			return false;
+	}
+
+	if (KHR_draco_mesh_compression && jsonObjectGetType(KHR_draco_mesh_compression, "attributes") == JSONtype_OBJECT)
+	{
+		sh_new_strdup(p.compressionData.attributes);
+		JSONobject attribs = jsonObjectGet(KHR_draco_mesh_compression, "attributes").object;
+		struct MeshPrimitiveAttributeReadCtx attribCtx = { .attributes = p.compressionData.attributes, .accessors = ctx->accessors };
+		
+		bool success = jsonObjectForeach(attribs, parseMeshPrimitiveAttributeTableCallback, &attribCtx);
+
+		if (!success)
+			return false;
+	}
+
+	return true;
+}
+
+
 struct MeshReadCtx
 {
 	struct GLTFmesh* meshes;
 
+	
+	const struct GLTFaccessor* accessors;
+	const struct GLTFbufferView* bufferViews;
+	const struct GLTFmaterial* materials;
 };
+static _Success_(return != false) bool parseMeshArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct MeshReadCtx* ctx = (struct MeshReadCtx*)userData;
+	assert(ctx);
+
+	JSONobject o = v.object;
+
+	struct GLTFmesh m = {
+		.primitives = NULL,
+		.weights = NULL,
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", _JVU(NULL)).string),
+	};
+	JSONarray
+		primitives = jsonObjectGet(o, "primitives").array,
+		weights = jsonObjectGetOrElse(o, "weights", _JVU(NULL)).array;
+	
+	if (weights)
+	{
+		arrsetlen(m.weights, jsonArrayGetSize(weights));
+		parseVector(weights, m.weights);
+	}
+
+	arrsetlen(m.primitives, jsonArrayGetSize(primitives));
+	struct MeshPrimitiveReadCtx primitiveCtx = {
+		.primitives = m.primitives, 
+		.accessors = ctx->accessors, 
+		.bufferViews = ctx->bufferViews, 
+		.materials = ctx->materials };
+	return jsonArrayForeach(primitives, parseMeshPrimitveArrayCallback, &primitiveCtx) != 0;
+}
+
+void destroyMesh(struct GLTFmesh* mesh)
+{
+	if (mesh->name)
+		free(mesh->name);
+
+	arrfree(mesh->weights);
+
+	const size_t primitiveC = arrlenu(mesh->primitives);
+	for (int i = 0; i < primitiveC; i++)
+	{
+		struct GLTFmesh_primitive p = mesh->primitives[i];
+		shfree(p.attributes);
+
+		const size_t targetC = arrlenu(p.targets);
+		for (int j = 0; j < targetC; i++)
+		{
+			shfree(p.targets[j]);
+		}
+		arrfree(p.targets);
+
+		shfree(p.compressionData.attributes);
+	}
+
+}
 
 #pragma endregion
 
@@ -873,7 +1059,7 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 	assert(*itVersion == '.');
 	gltf.asset.versionMinor = (uint32_t)strtoull(itVersion, NULL, 10);
 
-	const char* itVersion = jsonObjectGetOrElse(asset, "minVersion", JVU(string = NULL)).string;
+	itVersion = jsonObjectGetOrElse(asset, "minVersion", JVU(string = NULL)).string;
 	if (itVersion)
 	{
 		gltf.asset.versionMajor = (uint32_t)strtoull(itVersion, itVersion, 10);
@@ -1014,6 +1200,11 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 		jsonArrayForeach(materials, parseMaterialArrayCallback, &ctx);
 	}
 	
+	if (meshes && accessors)
+	{
+		struct MeshReadCtx ctx = { .meshes = gltf.meshes, .accessors = gltf.accessors, .bufferViews = gltf.bufferViews, .materials = gltf.materials };
+
+	}
 
 	
 
