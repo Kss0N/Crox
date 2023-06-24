@@ -27,7 +27,12 @@
 #include <tchar.h>
 #include <float.h>
 
-#include <assert.h>
 #include <malloc.h>
 
 #include <crtdbg.h>
+
+#ifdef _DEBUG
+#define assert(expr) if(!(expr)) __debugbreak();
+#else
+#define assert(expr) 
+#endif // _DEBUG

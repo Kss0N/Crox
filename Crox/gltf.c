@@ -33,6 +33,7 @@ struct StringArrayReadCtx
 static _Success_(return != false) bool parseStringArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	char** strArr = (char**)userData;
+	assert(strArr);
 
 	if (t != JSONtype_STRING)
 		return false;
@@ -71,6 +72,7 @@ static const GLenum ALLOWED_BUFFER_VIEW_TARGET[] = {GL_ARRAY_BUFFER, GL_ELEMENT_
 static _Success_(return != false) bool parseVectorArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	float* vec = (float*)userData;
+	assert(vec);
 
 	vec[ix] = (t == JSONtype_NUMBER) ? (float)v.number : (float)v.integer;
 
@@ -228,6 +230,7 @@ struct AccessorReadCtx
 static _Success_(return != false) bool parseAccessorArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct AccessorReadCtx* ctx = (struct AccessorReadCtx*)userData;
+	assert(ctx);
 	JSONobject o = v.object;
 
 
@@ -291,6 +294,7 @@ struct AnimationSamplerReadCtx
 static _Success_(return != false) bool parseAnimationSamplerCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct AnimationSamplerReadCtx* ctx = (struct AnimationSamplerReadCtx*)userData;
+	assert(ctx);
 	JSONobject o = v.object;
 
 	assert(jsonObjectGetType(o,  "input") == JSONtype_INTEGER);
@@ -330,6 +334,7 @@ struct AnimationChannelReadCtx
 static _Success_(return != false) bool parseAnimationChannelArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct AnimationChannelReadCtx* ctx = (struct AnimationChannelReadCtx*)userData;
+	assert(ctx);
 	JSONobject
 		o = v.object,
 		target = jsonObjectGet(o, "target").object;
@@ -360,6 +365,7 @@ struct AnimationReadCtx
 static _Success_(return != false) bool parseAnimationArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct AnimationReadCtx* ctx = (struct AnimatonReadCtx*)userData;
+	assert(ctx);
 	JSONobject
 		o = v.object;
 	JSONarray
@@ -433,6 +439,7 @@ struct BufferReadCtx {
 static _Success_(return != false) bool parseBufferArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct BufferReadCtx* ctx = (struct BufferReadCtx*)userData;
+	assert(ctx);
 	JSONobject o = v.object;
 
 	struct GLTFbuffer b = {
@@ -477,6 +484,7 @@ struct BufferViewReadCtx
 static _Success_(return != false) bool parseBufferViewArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct BufferViewReadCtx* ctx = (struct BufferViewReadCtx*)userData;
+	assert(ctx);
 	JSONobject o = v.object;
 
 	assert(jsonObjectGetType(o, "buffer") == JSONtype_INTEGER);
@@ -519,7 +527,7 @@ struct CameraReadCtx
 static _Success_(return != false) bool parseCameraArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct CameraReadCtx* ctx = (struct CameraReadCtx*)userData;
-
+	assert(ctx);
 	JSONobject o = v.object,
 		perspective = jsonObjectGetOrElse(o, "perspective", _JVU(NULL)).object,
 		orthographic= jsonObjectGetOrElse(o, "orthographic",_JVU(NULL)).object;
@@ -570,6 +578,7 @@ struct ImageReadCtx
 static _Success_(return != false) bool parseImageArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
 	struct ImageReadCtx* ctx = (struct ImageReadCtx*)userData;
+	assert(ctx);
 	JSONobject o = v.object;
 
 	struct GLTFimage img = {
@@ -773,7 +782,7 @@ static _Success_(return != false) bool parseMaterialArrayCallback(_In_ JSONarray
 
 		.thicknessTexture	   = tt	 ? parseTextureInfo(tt, ctx->textures) : DEFAULT_TEXTURE_INFO,
 	};
-	if (jsonObjectGetType(pbr, "baseColorFactor") == JSONtype_ARRAY)
+	if (pbr && jsonObjectGetType(pbr, "baseColorFactor") == JSONtype_ARRAY)
 	{
 		parseVector(jsonObjectGet(pbr, "baseColorFactor").array, m.baseColorFactor);
 	}
@@ -781,23 +790,23 @@ static _Success_(return != false) bool parseMaterialArrayCallback(_In_ JSONarray
 	{
 		parseVector(jsonObjectGet(o, "emissiveFactor").array, m.emissiveFactor);
 	}
-	if (jsonObjectGetType(KHR_materials_diffuse_transmission, "diffuseTransmissionColorFactor") == JSONtype_ARRAY)
+	if (KHR_materials_diffuse_transmission && jsonObjectGetType(KHR_materials_diffuse_transmission, "diffuseTransmissionColorFactor") == JSONtype_ARRAY)
 	{
 		parseVector(jsonObjectGet(KHR_materials_diffuse_transmission, "diffuseTransmissionColorFactor").array, m.diffuseTransmissionColorFactor);
 	}
-	if (jsonObjectGetType(KHR_materials_sheen, "sheenColorFactor") == JSONtype_ARRAY)
+	if (KHR_materials_sheen && jsonObjectGetType(KHR_materials_sheen, "sheenColorFactor") == JSONtype_ARRAY)
 	{
 		parseVector(jsonObjectGet(KHR_materials_sheen, "sheenColorFactor").array, m.sheenColorFactor);
 	}
-	if (jsonObjectGetType(KHR_materials_specular, "specularColorFactor") == JSONtype_ARRAY)
+	if (KHR_materials_specular && jsonObjectGetType(KHR_materials_specular, "specularColorFactor") == JSONtype_ARRAY)
 	{
 		parseVector(jsonObjectGet(KHR_materials_specular, "specularColorFactor").array, m.specularColorFactor);
 	}
-	if (jsonObjectGetType(KHR_materials_sss, "scatterColor") == JSONtype_ARRAY)
+	if (KHR_materials_sss && jsonObjectGetType(KHR_materials_sss, "scatterColor") == JSONtype_ARRAY)
 	{
 		parseVector(jsonObjectGet(KHR_materials_sss, "scatterColor").array, m.scatterColor);
 	}
-	if (jsonObjectGetType(KHR_materials_volume, "attenuationColor") == JSONtype_ARRAY)
+	if (KHR_materials_volume && jsonObjectGetType(KHR_materials_volume, "attenuationColor") == JSONtype_ARRAY)
 	{
 		parseVector(jsonObjectGet(KHR_materials_volume, "attenuationColor").array, m.attenuationColor);
 	}
@@ -818,7 +827,7 @@ void destroyMaterial(struct GLTFmaterial* mtl)
 
 struct MeshPrimitiveAttributeReadCtx
 {
-	struct GLTFmesh_primitive_attributesKV* attributes;
+	struct GLTFmesh_primitive_attributesKV** pAttributes;
 	
 	const struct GLTFaccessor* accessors;
 };
@@ -829,7 +838,7 @@ static _Success_(return != false) bool parseMeshPrimitiveAttributeTableCallback(
 
 	if (t != JSONtype_INTEGER) return false;
 
-	shput(ctx->attributes, key, ctx->accessors + v.uint);
+	shput(*ctx->pAttributes, key, ctx->accessors + v.uint);
 
 	return true;
 }
@@ -837,7 +846,7 @@ static _Success_(return != false) bool parseMeshPrimitiveAttributeTableCallback(
 
 struct MeshPrimitiveTargetReadCtx
 {
-	struct GLTFmesh_primitive_targetKV* target;
+	struct GLTFmesh_primitive_targetKV** pTarget;
 
 	const struct GLTFaccessor* accessors;
 };
@@ -847,7 +856,7 @@ static _Success_(return != false) bool parseMeshPrimitiveMorphTargetCallback(_In
 	assert(ctx);
 	if (t != JSONtype_INTEGER) return false;
 
-	shput(ctx->target, key, ctx->accessors + v.uint);
+	shput(*ctx->pTarget, key, ctx->accessors + v.uint);
 	return true;
 }
 
@@ -867,7 +876,7 @@ static _Success_(return != false) bool parseMeshPrimitiveMorphTargetArrayCallbac
 	struct GLTFmesh_primitive_targetKV* target = NULL;
 	sh_new_strdup(target);
 
-	struct MeshPrimitiveTargetReadCtx tCtx = { .target = target, .accessors = ctx->accessors };
+	struct MeshPrimitiveTargetReadCtx tCtx = { .pTarget = &target, .accessors = ctx->accessors };
 	bool success = jsonObjectForeach(o, parseMeshPrimitiveMorphTargetCallback, &tCtx);
 	if (success)
 		ctx->targets[ix] = target;
@@ -896,7 +905,7 @@ static _Success_(return != false) bool parseMeshPrimitveArrayCallback(_In_ JSONa
 	{
 		.attributes = NULL,
 		.indices = jsonObjectGetType(o, "indices") == JSONtype_INTEGER ? ctx->accessors + jsonObjectGet(o,   "indices").uint : NULL,
-		.material= jsonObjectGetType(o, "material")== JSONtype_INTEGER ? ctx->materials + jsonObjectGet(o, "materials").uint : NULL,
+		.material= jsonObjectGetType(o, "material")== JSONtype_INTEGER ? ctx->materials + jsonObjectGet(o, "material").uint : NULL,
 		.targets = NULL,
 		.mode = (GLenum)jsonObjectGetOrElse(o, "mode", _JVU(GL_TRIANGLES)).uint, 
 		.compressionData = {
@@ -909,7 +918,7 @@ static _Success_(return != false) bool parseMeshPrimitveArrayCallback(_In_ JSONa
 	if (jsonObjectGetType(o, "attributes") == JSONtype_OBJECT)
 	{
 		sh_new_strdup(p.attributes);
-		struct MeshPrimitiveAttributeReadCtx attribCtx = { .attributes = p.attributes, .accessors = ctx->accessors };
+		struct MeshPrimitiveAttributeReadCtx attribCtx = { .pAttributes = &p.attributes, .accessors = ctx->accessors };
 		bool success = jsonObjectForeach(jsonObjectGet(o, "attributes").object, parseMeshPrimitiveAttributeTableCallback, &attribCtx);
 
 		if (!success) 
@@ -931,7 +940,7 @@ static _Success_(return != false) bool parseMeshPrimitveArrayCallback(_In_ JSONa
 	{
 		sh_new_strdup(p.compressionData.attributes);
 		JSONobject attribs = jsonObjectGet(KHR_draco_mesh_compression, "attributes").object;
-		struct MeshPrimitiveAttributeReadCtx attribCtx = { .attributes = p.compressionData.attributes, .accessors = ctx->accessors };
+		struct MeshPrimitiveAttributeReadCtx attribCtx = { .pAttributes = &p.compressionData.attributes, .accessors = ctx->accessors };
 		
 		bool success = jsonObjectForeach(attribs, parseMeshPrimitiveAttributeTableCallback, &attribCtx);
 
@@ -939,6 +948,8 @@ static _Success_(return != false) bool parseMeshPrimitveArrayCallback(_In_ JSONa
 			return false;
 	}
 
+
+	ctx->primitives[ix] = p;
 	return true;
 }
 
@@ -1176,9 +1187,9 @@ static _Success_(return != false) bool parseSceneArrayCallback(_In_ JSONarray a,
 	if (nodes)
 	{
 		arrsetlen(s.nodes, jsonArrayGetSize(nodes));
-		
-		struct NodeChildrenReadCtx cCtx = { .children = s.nodes, .nodes = ctx->nodes };
-		bool success = jsonArrayForeach(nodes, parseNodeChildrenArrayCallback, &ctx);
+
+		struct NodeChildrenReadCtx childCtx = { .children = s.nodes, .nodes = ctx->nodes };
+		bool success = jsonArrayForeach(nodes, parseNodeChildrenArrayCallback, &childCtx);
 		if (!success)
 			return false;
 	}
@@ -1382,11 +1393,12 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 
 	assert(jsonObjectGetType(object, "asset") == JSONtype_OBJECT);
 	JSONobject asset = jsonObjectGet(object, "asset").object;
+
 	gltf.asset.copyright = copyStringHeap(jsonObjectGetOrElse(asset, "copyright", JVU(string = NULL)).string);
 	gltf.asset.generator = copyStringHeap(jsonObjectGetOrElse(asset, "generator", JVU(string = NULL)).string);
 
 	const char* itVersion = jsonObjectGet(asset, "version").string;
-	gltf.asset.versionMajor = (uint32_t)strtoull(itVersion, itVersion, 10);
+	gltf.asset.versionMajor = (uint32_t)strtoull(itVersion, &itVersion, 10);
 	assert(*itVersion == '.');
 	gltf.asset.versionMinor = (uint32_t)strtoull(itVersion, NULL, 10);
 
@@ -1419,21 +1431,21 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 
 	;
 	JSONarray
-		extensionsUsed		= jsonObjectGetOrElse(object, "extensionsUsed",		JVU(array = NULL)).array,
-		extensionsRequired	= jsonObjectGetOrElse(object, "extensionsRequired", JVU(array = NULL)).array,
-		accessors			= jsonObjectGetOrElse(object, "accessors",			JVU(array = NULL)).array,
-		animations			= jsonObjectGetOrElse(object, "animations",			JVU(array = NULL)).array,
-		buffers				= jsonObjectGetOrElse(object, "buffers",			JVU(array = NULL)).array,
-		bufferViews			= jsonObjectGetOrElse(object, "bufferViews",		JVU(array = NULL)).array,
-		cameras				= jsonObjectGetOrElse(object, "cameras",			JVU(array = NULL)).array,
-		images				= jsonObjectGetOrElse(object, "images",				JVU(array = NULL)).array,
-		materials			= jsonObjectGetOrElse(object, "materials",			JVU(array = NULL)).array,
-		meshes				= jsonObjectGetOrElse(object, "meshes",				JVU(array = NULL)).array,
-		nodes				= jsonObjectGetOrElse(object, "nodes",				JVU(array = NULL)).array,
-		samplers			= jsonObjectGetOrElse(object, "samplers",			JVU(array = NULL)).array,
-		scenes				= jsonObjectGetOrElse(object, "scenes",				JVU(array = NULL)).array,
-		skins				= jsonObjectGetOrElse(object, "skins",				JVU(array = NULL)).array,
-		textures			= jsonObjectGetOrElse(object, "textures",			JVU(array = NULL)).array,
+		extensionsUsed		= jsonObjectGetOrElse(object, "extensionsUsed",		_JVU(NULL)).array,
+		extensionsRequired	= jsonObjectGetOrElse(object, "extensionsRequired", _JVU(NULL)).array,
+		accessors			= jsonObjectGetOrElse(object, "accessors",			_JVU(NULL)).array,
+		animations			= jsonObjectGetOrElse(object, "animations",			_JVU(NULL)).array,
+		buffers				= jsonObjectGetOrElse(object, "buffers",			_JVU(NULL)).array,
+		bufferViews			= jsonObjectGetOrElse(object, "bufferViews",		_JVU(NULL)).array,
+		cameras				= jsonObjectGetOrElse(object, "cameras",			_JVU(NULL)).array,
+		images				= jsonObjectGetOrElse(object, "images",				_JVU(NULL)).array,
+		materials			= jsonObjectGetOrElse(object, "materials",			_JVU(NULL)).array,
+		meshes				= jsonObjectGetOrElse(object, "meshes",				_JVU(NULL)).array,
+		nodes				= jsonObjectGetOrElse(object, "nodes",				_JVU(NULL)).array,
+		samplers			= jsonObjectGetOrElse(object, "samplers",			_JVU(NULL)).array,
+		scenes				= jsonObjectGetOrElse(object, "scenes",				_JVU(NULL)).array,
+		skins				= jsonObjectGetOrElse(object, "skins",				_JVU(NULL)).array,
+		textures			= jsonObjectGetOrElse(object, "textures",			_JVU(NULL)).array,
 		lights  = NULL,
 		variants= NULL,
 		audio	= NULL,
@@ -1566,6 +1578,7 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 		gltf.scene = jsonObjectGetType(object, "scene") == JSONtype_INTEGER ? gltf.scene + jsonObjectGet(object, "scene").uint : &gltf.scenes[0];
 	}
 
+	jsonDestroyObject(object);
 	return gltf;
 }
 

@@ -24,6 +24,7 @@
 #include <stb_include.h>
 #include <cwalk.h>
 
+#include "gltf.h"
 #include "json.h"
 
 
@@ -947,47 +948,6 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	//  Variables that in the future will be configurable (TODO: make configurable)
 	//
 
-	const char* SETTINGS_JSON_STRING = 
-		"{							"
-		"	'name'		: 'Jacob',	"
-		"	\"age\"		: 19 ,		"
-		"	'score'		: 99.9,		"
-		"	'based'		: true,		"
-		"	'spouse'	: null,		"
-		"	'Languages'	: [			"
-		"		'C++',				"
-		"		'Java',				"		
-		"		'Scala',			"
-		"		'Python'			"
-		"	],						"
-		"	'dates' : {				"
-		"		'birthday':20031009,"
-		"		'baptism' :20031111,"
-		"		'wedding' : 0,		"
-		"		'death'	  : 0		"
-		"	}						"
-		"}"
-		;
-	JSONobject settings = jsonParseValue(SETTINGS_JSON_STRING, 255, NULL).object;
-
-	const char* name = jsonObjectGet(settings, "name").string;
-	uint32_t age = jsonObjectGet(settings, "age").uint;
-	float score = jsonObjectGet(settings, "score").number;
-	bool based = jsonObjectGet(settings, "based").boolean;
-	bool hasSpouse = jsonObjectGetType(settings, "spouse") != JSONtype_NULL;
-	
-	JSONarray languages = jsonObjectGet(settings, "Languages").array;
-	const char* strLangs[4];
-	strLangs[0] = jsonArrayGet(languages, 0).string;
-	strLangs[1] = jsonArrayGet(languages, 1).string;
-	strLangs[2] = jsonArrayGet(languages, 2).string;
-	strLangs[3] = jsonArrayGet(languages, 3).string;
-	
-	bool hasDates = jsonObjectGetType(settings, "dates") == JSONtype_OBJECT;
-
-	jsonDestroyObject(settings);
-
-	__debugbreak();
 	const vec3  DEFAULT_AMBIENT  = { 0.8f, 0.8f, 0.8f };
 	const vec3  DEFAULT_DIFFUSE  = { 0.8f, 0.8f, 0.8f };
 	const vec3  DEFAULT_SPECULAR = { 0.8f, 0.8f, 0.8f };
@@ -1014,6 +974,8 @@ extern int _tmain(_In_ NkContext* ctx, _In_ uint32_t argC, _In_ _TCHAR** argV, _
 	}
 	const GLboolean notCorrupted = glUnmapNamedBuffer(defaultMaterialUBO);
 	assert(notCorrupted); //TODO
+
+
 
 	//
 	// Create Meshes
