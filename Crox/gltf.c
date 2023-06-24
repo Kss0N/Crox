@@ -1124,7 +1124,7 @@ static void destroyNode(struct GLTFnode* n)
 
 struct SamplerReadCtx
 {
-	struct GLTFsampler* samplers
+	struct GLTFsampler* samplers;
 };
 static _Success_(return != false) bool parseSamlperArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
@@ -1142,6 +1142,11 @@ static _Success_(return != false) bool parseSamlperArrayCallback(_In_ JSONarray 
 	};
 	ctx->samplers[ix] = s;
 	return true;
+}
+void destroySampler(struct GLTFsampler* sampler)
+{
+	if (sampler->name)
+		free(sampler->name);
 }
 
 

@@ -15,11 +15,18 @@ struct Val
 	JSONvalue v;
 };
 
-struct _JSONobject
+struct _JSONobjectKV
 {
 	char* key;
 	struct Val value;
 };
+
+struct _JSONobject
+{
+	//JSONobject is a pointer to a pointer (pp) because stb_ds messes a little with certain 'stuff'
+	struct _JSONobjectKV* map;
+};
+
 struct _JSONarray
 {
 	JSONarray next;
@@ -165,9 +172,18 @@ static bool pushBack (_In_ JSONarray a, JSONtype t, JSONvalue v, bool copy)
 	*node = (struct _JSONarray){ NULL, {t, copy ? copyValue(t,v) : v} };
 	if (a->next)
 	{
-		JSONarray head = a->next->next;
-		a->next = node;
+#ifdef _DEBUG
+		if (a->value.v.uint == 1)
+		{
+			assert(a->next == a->next->next);
+		}
+
+#endif // _DEBUG
+		JSONarray last = a->next;
+		JSONarray head = last->next;
+		last->next = node;
 		node->next = head;
+		a->next = node;
 	}
 	else
 	{
@@ -181,7 +197,7 @@ static bool pushBack (_In_ JSONarray a, JSONtype t, JSONvalue v, bool copy)
 static bool setObject(_In_ JSONobject o, _In_z_ const char* key, JSONtype type, JSONvalue value, bool copy)
 {
 	struct Val v = { type, value };
-	shput(o, key, v);
+	shput(o->map, key, v);
 	return true;
 }
 
@@ -230,7 +246,7 @@ static JSONarray  parseArray (_In_z_ const char* string, _In_ uint8_t depth, cha
 	const char* it = string + 1; //skip left '['
 	it += strspn(it, IGNORED);
 
-	while (*it != '}')
+	while (*it != ']')
 	{
 		it += strspn(it, IGNORED);
 
@@ -426,10 +442,10 @@ static _Success_(return != false) bool arrayFindValCallback(_In_ JSONarray a, _I
 	else return true; 
 }
 
-static JSONobject getObject(_In_ JSONobject o, const char* key)
+static struct _JSONobjectKV* getObject(_In_ JSONobject o, const char* key)
 {
 	assert(o != NULL);
-	return shgetp_null(o, key);
+	return shgetp_null(o->map, key);
 }
 
 
@@ -485,28 +501,30 @@ uint32_t  jsonArrayForeach	(_In_ JSONarray a, _In_ JSONarray_ForeachCallback cb,
 
 JSONvalue jsonObjectGet		(_In_ JSONobject o, _In_z_ const char* key)
 {
-	JSONobject x = getObject(o, key);
+	struct _JSONobjectKV* x = getObject(o, key);
 	assert(x != NULL);
 	return x->value.v;
 }
 JSONtype  jsonObjectGetType(_In_ JSONobject o, _In_z_ const char* key)
 {
-	JSONobject x = getObject(o, key);
+	struct _JSONobjectKV* x = getObject(o, key);
 	return x != NULL ? x->value.type : JSONtype_UNKNOWN;
 }
 JSONvalue jsonObjectGetOrElse(_In_ JSONobject o, _In_z_ const char* key, JSONvalue _default)
 {
-	JSONobject x = getObject(o, key);
+	struct _JSONobjectKV* x = getObject(o, key);
 	return x != NULL ? x->value.v : _default;
 }
 uint32_t  jsonObjectForeach(_In_ JSONobject o, _In_ JSONobject_ForeachCallback cb, _Inout_opt_ void* userData)
 {
 	uint32_t i;
-	const size_t s = shlenu(o);
-	for (i = 0; i < s; i++) if (o[i].key != NULL)
+	struct _JSONobjectKV* map = o->map;
+
+	const size_t s = shlenu(map);
+	for (i = 0; i < s; i++) if (map[i].key != NULL)
 	{
-		struct _JSONobject x = o[i];
-		if (!cb(o, x.key, x.value.type, x.value.v, userData))
+		struct _JSONobjectKV* x = &map[i];
+		if (!cb(o, x->key, x->value.type, x->value.v, userData))
 			return 0;
 	}
 	return i;
@@ -524,8 +542,10 @@ JSONvalue jsonParseValue(_In_z_ const char* string, _In_ uint8_t maxDepth, _Out_
 
 void jsonDestroyObject(_In_ JSONobject obj)
 {
+	if (!obj) return;
 	jsonObjectForeach(obj, destroyObjectCallback, NULL);
-	shfree(obj);
+	shfree(obj->map);
+	free(obj->map);
 }
 void jsonDestroyArray(_In_ JSONarray a)
 {
@@ -541,8 +561,8 @@ void jsonDestroyArray(_In_ JSONarray a)
 
 JSONobject jsonCreateObject()
 {
-	JSONobject obj = NULL;
-	sh_new_strdup(obj);
+	JSONobject obj = malloc(sizeof*obj);
+	sh_new_strdup(obj->map);
 	return obj;
 }
 JSONarray  jsonCreateArray()
