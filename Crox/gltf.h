@@ -510,7 +510,7 @@ struct GLTFmesh_primitive_variantMappingsKHR
 struct GLTFnode
 {
 	const struct GLTFcamera* camera;
-	struct GLTFnode* children;
+	struct GLTFnode** children;
 	const struct GLTFskin* skin;
 	const struct GLTFmesh* mesh;
 

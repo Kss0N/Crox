@@ -446,6 +446,7 @@ static void destroyBufferView(struct GLTFbufferView* bw)
 
 #pragma endregion
 
+
 #pragma region Camera
 
 struct CameraReadCtx
@@ -495,6 +496,7 @@ static void destroyCamera(struct GLTFcamera* c)
 
 #pragma endregion
 
+
 #pragma region Image
 
 struct ImageReadCtx
@@ -534,6 +536,7 @@ static void destroyImage(struct GLTFimage* img)
 }
 
 #pragma endregion
+
 
 #pragma region Material
 
@@ -748,6 +751,7 @@ void destroyMaterial(struct GLTFmaterial* mtl)
 }
 #pragma endregion
 
+
 #pragma region Mesh
 
 struct MeshPrimitiveAttributeReadCtx
@@ -905,7 +909,9 @@ static _Success_(return != false) bool parseMeshArrayCallback(_In_ JSONarray a, 
 	if (weights)
 	{
 		arrsetlen(m.weights, jsonArrayGetSize(weights));
-		parseVector(weights, m.weights);
+		bool success = parseVector(weights, m.weights); 
+		if (!success)
+			return false;
 	}
 
 	arrsetlen(m.primitives, jsonArrayGetSize(primitives));
@@ -914,7 +920,9 @@ static _Success_(return != false) bool parseMeshArrayCallback(_In_ JSONarray a, 
 		.accessors = ctx->accessors, 
 		.bufferViews = ctx->bufferViews, 
 		.materials = ctx->materials };
-	return jsonArrayForeach(primitives, parseMeshPrimitveArrayCallback, &primitiveCtx) != 0;
+	bool success = jsonArrayForeach(primitives, parseMeshPrimitveArrayCallback, &primitiveCtx) != 0;
+	ctx->meshes[ix] = m;
+	return success;
 }
 
 void destroyMesh(struct GLTFmesh* mesh)
@@ -944,6 +952,116 @@ void destroyMesh(struct GLTFmesh* mesh)
 
 #pragma endregion
 
+
+#pragma region Node
+
+#define UNIT_MATRIX {1,0,0,0,	0,1,0,0,	0,0,1,0,	0,0,0,1}
+#define UNIT_QUAT {0,0,0,1}
+#define DEFAULT_SCALE {1,1,1}
+#define ORGIN {0,0,0}
+
+struct NodeChildrenReadCtx
+{
+	struct GLTFnode** children;
+
+	const struct GLTFnode* nodes;
+};
+static _Success_(return != false) bool parseNodeChildrenArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct NodeChildrenReadCtx* ctx = (struct NodeChildrenReadCtx*)userData;
+	assert(ctx != NULL);
+	if (t != JSONtype_INTEGER)
+		return false;
+	ctx->children[ix] = ctx->nodes + v.uint;
+	return true;
+}
+
+struct NodeReadCtx
+{
+	struct GLTFnode* nodes;
+
+	const struct GLTFcamera		* cameras;
+	const struct GLTFlightKHR	* lights;
+	const struct GLTFmesh		* meshes;
+	const struct GLTFskin		* skins;
+};
+static _Success_(return != false) bool parseNodeArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct NodeReadCtx* ctx = (struct NodeReadCtx*)userData;
+	assert(ctx);
+	JSONobject o = v.object;
+
+	struct GLTFnode n = {
+		.camera = jsonObjectGetType(o, "camera") == JSONtype_INTEGER ? ctx->cameras + jsonObjectGet(o, "camera").uint : NULL,
+		.children = NULL,
+		.skin = jsonObjectGetType(o, "skin") == JSONtype_INTEGER ? ctx-> skins + jsonObjectGet(o, "skin").uint : NULL,
+		.mesh = jsonObjectGetType(o, "mesh") == JSONtype_INTEGER ? ctx->meshes + jsonObjectGet(o, "mesh").uint : NULL,
+		.matrix = UNIT_MATRIX,
+		.rotation = UNIT_QUAT,
+		.scale = DEFAULT_SCALE,
+		.translation = ORGIN,
+		.weights = NULL,
+
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", _JVU(NULL)).string),
+
+		.light = jsonObjectGetType(o, "light") == JSONtype_INTEGER ? ctx->lights + jsonObjectGet(o, "light").uint : NULL,
+	};
+
+	JSONarray
+		children	= jsonObjectGetOrElse(o, "children",	_JVU(NULL)).array,
+		matrix		= jsonObjectGetOrElse(o, "matrix",		_JVU(NULL)).array,
+		rotation	= jsonObjectGetOrElse(o, "rotation",	_JVU(NULL)).array,
+		scale		= jsonObjectGetOrElse(o, "scale",		_JVU(NULL)).array,
+		translation	= jsonObjectGetOrElse(o, "translation",	_JVU(NULL)).array,
+		weights		= jsonObjectGetOrElse(o, "weights",		_JVU(NULL)).array;
+	if (children)
+	{
+		arrsetlen(n.children, jsonArrayGetSize(children));
+
+		struct NodeChildrenReadCtx childCtx = {
+			.children = n.children,
+			.nodes = ctx->nodes
+		};
+		bool success = jsonArrayForeach(children, parseNodeChildrenArrayCallback, &childCtx);
+		if (!success)
+			return success;
+	}
+	if (matrix)
+	{
+		bool success = parseVector(matrix, n.matrix);
+		if (!success)
+			return success;
+	}
+	if (rotation)
+	{
+		bool success = parseVector(rotation, n.rotation);
+		if (!success)
+			return success;
+	}
+	if (scale)
+	{
+		bool success = parseVector(scale, n.scale);
+		if (!success)
+			return success;
+	}
+	if (translation)
+	{
+		bool success = parseVector(translation, n.translation);
+		if (!success)
+			return success;
+	}
+	if (weights)
+	{
+		arrsetlen(n.weights, jsonArrayGetSíze(weights));
+		bool success = parseVector(weights, n.weights);
+		if (!success)
+			return success;
+	}
+
+	return true;
+}
+
+#pragma endregion
 
 
 ;
@@ -1199,11 +1317,15 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 		struct MaterialReadCtx ctx = { .materials = gltf.materials, .textures = gltf.textures };
 		jsonArrayForeach(materials, parseMaterialArrayCallback, &ctx);
 	}
-	
 	if (meshes && accessors)
 	{
 		struct MeshReadCtx ctx = { .meshes = gltf.meshes, .accessors = gltf.accessors, .bufferViews = gltf.bufferViews, .materials = gltf.materials };
-
+		jsonArrayForeach(meshes, parseMeshArrayCallback, &ctx);
+	}
+	if (nodes)
+	{
+		struct NodeReadCtx ctx = { .nodes = gltf.nodes, .cameras = gltf.cameras, .lights = gltf.lights, .meshes = gltf.meshes, .skins = gltf.skins };
+		jsonArrayForeach(nodes, parseNodeArrayCallback, &ctx);
 	}
 
 	
