@@ -138,7 +138,8 @@ static void destroyValue(JSONtype t, JSONvalue v)
 }
 static void destroyArrayRecursive(JSONarray node, JSONarray last)
 {
-	if (node->next != last) destroyArrayRecursive(node->next, last);
+	if (node->next != last) 
+		destroyArrayRecursive(node->next, last);
 	free((void*)node);
 }
 
@@ -230,6 +231,7 @@ static JSONobject parseObject(_In_z_ const char* string, _In_ uint8_t depth, cha
 		
 		it += strspn(it, IGNORED);
 		if (*it == ',') it++;
+		it += strspn(it, IGNORED);
 
 		bool success = setObject(obj, key, type, value, false);
 		assert(success);
@@ -390,7 +392,7 @@ static JSONvalue  parseValue (_In_z_ const char* string, _In_ uint8_t depth, cha
 		if (number == (double)(int64_t)number) //is integer
 		{
 			t = JSONtype_INTEGER;
-			v = JVU(integer = strtoll(string, oIt, 10));
+			v = JVU(integer = (int64_t)strtod(string, oIt)); //it has to be strtod because for example 0.0 is encoded as a real number, but interpreted as an integer. 
 		}
 		else
 		{
@@ -444,7 +446,6 @@ static _Success_(return != false) bool arrayFindValCallback(_In_ JSONarray a, _I
 
 static struct _JSONobjectKV* getObject(_In_ JSONobject o, const char* key)
 {
-	assert(o != NULL);
 	return shgetp_null(o->map, key);
 }
 
@@ -553,8 +554,7 @@ void jsonDestroyArray(_In_ JSONarray a)
 
 	if (a->next != NULL)
 	{
-		destroyArrayRecursive(a->next->next, a->next);
-		free((void*)a->next);
+		destroyArrayRecursive(a->next, a->next);
 	}
 	free((void*)a);
 }
