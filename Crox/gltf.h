@@ -552,7 +552,7 @@ struct GLTFsampler
 
 struct GLTFscene
 {
-	struct GLTFnode* nodes;
+	struct GLTFnode** nodes;
 	GLTFname name;
 
 	const struct GLTFaudioEmitterKHR** emitters;
@@ -591,6 +591,8 @@ enum GLTFlight_typeKHR
 	GLTFlight_type_point,
 	GLTFlight_type_spot,
 	GLTFlight_type_directional,
+	
+	GLTFlight_type_max,
 };
 
 

@@ -99,6 +99,23 @@ static struct GLTFtextureInfo parseTextureInfo(JSONobject o, const struct GLTFte
 	return info;
 }
 
+struct NodeChildrenReadCtx
+{
+	struct GLTFnode** children;
+
+	const struct GLTFnode* nodes;
+};
+static _Success_(return != false) bool parseNodeChildrenArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct NodeChildrenReadCtx* ctx = (struct NodeChildrenReadCtx*)userData;
+	assert(ctx != NULL);
+	if (t != JSONtype_INTEGER)
+		return false;
+	ctx->children[ix] = ctx->nodes + v.uint;
+	return true;
+}
+
+
 
 
 #pragma region Accessor
@@ -960,22 +977,6 @@ void destroyMesh(struct GLTFmesh* mesh)
 #define DEFAULT_SCALE {1,1,1}
 #define ORGIN {0,0,0}
 
-struct NodeChildrenReadCtx
-{
-	struct GLTFnode** children;
-
-	const struct GLTFnode* nodes;
-};
-static _Success_(return != false) bool parseNodeChildrenArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
-{
-	struct NodeChildrenReadCtx* ctx = (struct NodeChildrenReadCtx*)userData;
-	assert(ctx != NULL);
-	if (t != JSONtype_INTEGER)
-		return false;
-	ctx->children[ix] = ctx->nodes + v.uint;
-	return true;
-}
-
 struct NodeReadCtx
 {
 	struct GLTFnode* nodes;
@@ -1052,13 +1053,175 @@ static _Success_(return != false) bool parseNodeArrayCallback(_In_ JSONarray a, 
 	}
 	if (weights)
 	{
-		arrsetlen(n.weights, jsonArrayGetSíze(weights));
+		arrsetlen(n.weights, jsonArrayGetSize(weights));
 		bool success = parseVector(weights, n.weights);
 		if (!success)
 			return success;
 	}
 
+	ctx->nodes[ix] = n;
 	return true;
+}
+
+static void destroyNode(struct GLTFnode* n)
+{
+	arrfree(n->children);
+	arrfree(n->weights);
+
+	if (n->name)
+		free(n->name);
+}
+
+#pragma endregion
+
+
+#pragma region Sampler
+
+struct SamplerReadCtx
+{
+	struct GLTFsampler* samplers
+};
+static _Success_(return != false) bool parseSamlperArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct SamplerReadCtx* ctx = (struct SamplerReadCtx*)userData;
+	assert(ctx);
+	JSONobject o = v.object;
+
+	struct GLTFsampler s = {
+		.magFilter = (GLenum)jsonObjectGetOrElse(o, "magFilter", _JVU(NULL)).uint,
+		.minFilter = (GLenum)jsonObjectGetOrElse(o, "minFilter", _JVU(NULL)).uint,
+		.wrapS = (GLenum)jsonObjectGetOrElse(o, "wrapS", _JVU(GL_REPEAT)).uint,
+		.wrapT = (GLenum)jsonObjectGetOrElse(o, "wrapT", _JVU(GL_REPEAT)).uint,
+
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", _JVU(NULL)).string),
+	};
+	ctx->samplers[ix] = s;
+	return true;
+}
+
+
+#pragma endregion
+
+
+#pragma region Scene
+
+struct SceneReadCtx
+{
+	struct GLTFscene* scenes;
+
+	const struct GLTFnode* nodes;
+};
+static _Success_(return != false) bool parseSceneArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct SceneReadCtx* ctx = (struct SceneReadCtx*)userData;
+	assert(ctx != NULL);
+	JSONobject o = v.object;
+
+	struct GLTFscene s = {
+		.nodes = NULL,
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", _JVU(NULL)).string),
+	};
+
+	JSONarray nodes = jsonObjectGetOrElse(o, "nodes", _JVU(NULL)).array;
+	if (nodes)
+	{
+		arrsetlen(s.nodes, jsonArrayGetSize(nodes));
+		
+		struct NodeChildrenReadCtx cCtx = { .children = s.nodes, .nodes = ctx->nodes };
+		bool success = jsonArrayForeach(nodes, parseNodeChildrenArrayCallback, &ctx);
+		if (!success)
+			return false;
+	}
+
+	ctx->scenes[ix] = s;
+	return true;
+}
+
+void destroyScene(struct GLTFscene* scene)
+{
+	if (scene->name)
+		free(scene->name);
+	arrfree(scene->nodes);
+}
+
+#pragma endregion
+
+
+#pragma region Skin
+
+struct SkinReadCtx
+{
+	struct GLTFskin* skins;
+
+	const struct GLTFaccessor* accessors;
+	const struct GLTFnode* nodes;
+};
+static _Success_(return != false) bool parseSkinArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct SkinReadCtx* ctx = (struct SkinReadCtx*)userData;
+	assert(ctx != NULL);
+	JSONobject o = v.object;
+
+	struct GLTFskin s = {
+		.inverseBindMatrices = jsonArrayGetType(o, "inverseBindMatrices") == JSONtype_INTEGER ? ctx->accessors + jsonObjectGet(o, "inverseBindMatrices").uint : NULL,
+		.skeleton = jsonArrayGetType(o, "skeleton") == JSONtype_INTEGER ? ctx->nodes + jsonObjectGet(o, "skeleton").uint : NULL,
+		.joints = NULL,
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", _JVU(NULL)).string),
+	};
+
+	JSONarray joints = jsonObjectGet(o, "joints").array;
+	if (joints)
+	{
+		arrsetlen(s.joints, jsonArrayGetSize(joints));
+		struct NodeChildrenReadCtx cCtx = { .children = s.joints, .nodes = ctx->nodes };
+		bool success = jsonArrayForeach(joints, parseNodeChildrenArrayCallback, &cCtx);
+		if (success)
+			return success;
+	}
+
+	ctx->skins[ix] = s;
+	return true;
+}
+
+void destroySkin(struct GLTFskin* skin)
+{
+	if (skin->name)
+		free(skin->name);
+	arrfree(skin->joints);
+}
+
+#pragma endregion
+
+
+#pragma region Texture
+
+struct TextureReadCtx
+{
+	struct GLTFtexture* textures;
+
+	const struct GLTFsampler* samplers;
+	const struct GLTFimage* images;
+};
+static _Success_(return != false) bool parseTextureArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
+{
+	struct TextureReadCtx* ctx = (struct TextureReadCtx*)userData;
+	assert(ctx != NULL);
+	JSONobject o = v.object;
+
+	struct GLTFtexture tex = {
+		.sampler = jsonObjectGetType(o, "sampler") == JSONtype_INTEGER ? ctx->samplers + jsonObjectGet(o, "sampler").uint : NULL,
+		.source = jsonObjectGetType(o, "souce") == JSONtype_INTEGER ? ctx->images + jsonObjectGet(o, "source").uint : NULL,
+		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", _JVU(NULL)).string),
+	};
+
+	ctx->textures[ix] = tex;
+	return true;
+}
+
+void destroyTexture(struct GLTFtexture* tex)
+{
+	if (tex->name)
+		free(tex->name);
 }
 
 #pragma endregion
@@ -1327,22 +1490,123 @@ extern struct GLTFgltf gltfRead(_In_ FILE* f, _In_ bool isGLB)
 		struct NodeReadCtx ctx = { .nodes = gltf.nodes, .cameras = gltf.cameras, .lights = gltf.lights, .meshes = gltf.meshes, .skins = gltf.skins };
 		jsonArrayForeach(nodes, parseNodeArrayCallback, &ctx);
 	}
+	if (samplers)
+	{
+		struct SamplerReadCtx ctx = { .samplers = gltf.samplers };
+		jsonArrayForeach(samplers, parseSamlperArrayCallback, &ctx);
+	}
+	if (scenes)
+	{
+		struct SceneReadCtx ctx = { .scenes = gltf.scenes, .nodes = gltf.nodes };
+		jsonArrayForeach(scenes, parseSceneArrayCallback, &ctx);
+	}
+	if (skins)
+	{
+		struct SkinReadCtx ctx = { .skins = gltf.skins, .accessors = gltf.accessors, .nodes = gltf.nodes };
+		jsonArrayForeach(skins, parseSkinArrayCallback, &ctx);
+	}
+	if (textures)
+	{
+		struct TextureReadCtx ctx = { .textures = gltf.textures, .samplers = gltf.samplers, .images = gltf.images };
+		jsonArrayForeach(textures, parseTextureArrayCallback, &ctx);
+	}
 
-	
+	if (scenes)
+	{
+		gltf.scene = jsonObjectGetType(object, "scene") == JSONtype_INTEGER ? gltf.scene + jsonObjectGet(object, "scene").uint : &gltf.scenes[0];
+	}
 
-
-
-
+	return gltf;
 }
 
 extern void gltfClear(_In_ struct GLTFgltf* gltf)
 {
+	const size_t accessorC = arrlenu(gltf->accessors);
+	for (int i = 0; i < accessorC; i++)
+		destroyAccessor(&gltf->accessors[i]);
+	arrfree(gltf->accessors);
+
+	const size_t animationC = arrlenu(gltf->animations);
+	for (int i = 0; i < animationC; i++)
+		destroyAnimation(&gltf->animations[i]);
+	arrfree(gltf->animations);
+
+	const size_t bufferC = arrlenu(gltf->buffers);
+	for (int i = 0; i < bufferC; i++)
+		destroyBuffer(&gltf->buffers[i]);
+	arrfree(gltf->buffers);
+
+	const size_t bufferViewC = arrlenu(gltf->bufferViews);
+	for (int i = 0; i < bufferViewC; i++)
+		destroyBufferView(&gltf->bufferViews[i]);
+	arrfree(gltf->bufferViews);
+
+	const size_t cameraC = arrlenu(gltf->cameras);
+	for (int i = 0; i < cameraC; i++)
+		destroyCamera(&gltf->cameras[i]);
+	arrfree(gltf->cameras);
+
+	const size_t imageC = arrlenu(gltf->images);
+	for (int i = 0; i < imageC; i++)
+		destroyImage(&gltf->images[i]);
+	arrfree(gltf->images);
+
+	const size_t materialC = arrlenu(gltf->materials);
+	for (int i = 0; i < materialC; i++)
+		destroyMaterial(&gltf->materials[i]);
+	arrfree(gltf->materials);
+
+	const size_t meshC = arrlenu(gltf->meshes);
+	for (int i = 0; i < meshC; i++)
+		destroyMesh(&gltf->meshes[i]);
+	arrfree(gltf->meshes);
+
+	const size_t nodeC = arrlenu(gltf->nodes);
+	for (int i = 0; i < nodeC; i++)
+		destroyNode(&gltf->nodes[i]);
+	arrfree(gltf->nodes);
+
+	const size_t samplerC = arrlenu(gltf->samplers);
+	for (int i = 0; i < samplerC; i++)
+		destroySampler(&gltf->samplers[i]);
+	arrfree(gltf->samplers);
+
+	const size_t sceneC = arrlenu(gltf->scenes);
+	for (int i = 0; i < sceneC; i++)
+		destroyScene(&gltf->scenes[i]);
+	arrfree(gltf->scenes);
+
+	const size_t skinC = arrlenu(gltf->skins);
+	for (int i = 0; i < skinC; i++)
+		destroySkin(&gltf->skins[i]);
+	arrfree(gltf->skins);
+
+	const size_t textureC = arrlenu(gltf->textures);
+	for (int i = 0; i < textureC; i++)
+		destroyTexture(&gltf->textures[i]);
+	arrfree(gltf->textures);
+
+	const size_t extensionsUsedC = arrlenu(gltf->extensionsUsed);
+	for (int i = 0; i < extensionsUsedC; i++)
+		free(&gltf->extensionsUsed[i]);
+	arrfree(gltf->extensionsUsed);
+
+	const size_t extensionsRequiredC = arrlenu(gltf->extensionsRequired);
+	for (int i = 0; i < extensionsRequiredC; i++)
+		free(&gltf->extensionsRequired[i]);
+	arrfree(gltf->extensionsRequired);
+
+	if (gltf->asset.copyright)
+		free(gltf->asset.copyright);
+	if (gltf->asset.generator)
+		free(gltf->asset.generator);
+	
 
 }
 
 extern void* gltfDataUriToBuffer(_In_z_ const char* data)
 {
-	GLTFname
+	const GLTFname
 		DATA_PFX = "data:",
 		MIME_TYPE = "application",
 		SUBTYPE_ALT1 = "octet-stream",
