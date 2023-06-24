@@ -153,6 +153,8 @@ enum   GLTFaccessor_type
 	GLTFaccessor_type_MAT2,
 	GLTFaccessor_type_MAT3,
 	GLTFaccessor_type_MAT4,
+
+	GLTFaccessor_type_max,
 };
 inline bool		_gltfAccessorHasValidSparse(_In_ struct GLTFaccessor* a)
 {
@@ -507,6 +509,17 @@ struct GLTFmesh_primitive_variantMappingsKHR
 };
 
 
+enum   GLTFmimeType
+{
+	GLTFmimeType_NONE,
+
+	GLTFmimeType_AUDIO_MPEG,
+
+	GLTFmimeType_IMAGE_JPEG,
+	GLTFmimeType_IMAGE_PNG,
+};
+
+
 struct GLTFnode
 {
 	const struct GLTFcamera* camera;
@@ -525,17 +538,6 @@ struct GLTFnode
 
 	const struct GLTFlightKHR* light;
 	const struct GLTFaudioEmitterKHR* emitter;
-};
-
-
-enum   GLTFmimeType
-{
-	GLTFmimeType_NONE,
-
-	GLTFmimeType_AUDIO_MPEG,
-
-	GLTFmimeType_IMAGE_JPEG,
-	GLTFmimeType_IMAGE_PNG,
 };
 
 

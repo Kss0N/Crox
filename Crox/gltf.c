@@ -52,6 +52,21 @@ static enum GLTFmimeType mimeTypeFromString(const char* str)
 		GLTFmimeType_NONE;
 }
 
+static bool enumArrayContains(_In_ uint32_t count, _In_reads_(count) GLenum* enumV, GLenum _enum)
+{
+	for (int i = 0; i < count; i++)
+	{
+		if (enumV[i] == _enum)
+			return true;
+	}
+
+	return false;
+}
+
+static const GLenum ALLOWED_COMP_TYPES[] = { GL_BYTE, GL_UNSIGNED_BYTE, GL_SHORT, GL_UNSIGNED_SHORT, GL_UNSIGNED_INT, GL_INT, GL_FLOAT };
+
+static const GLenum ALLOWED_BUFFER_VIEW_TARGET[] = {GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER};
+
 
 static _Success_(return != false) bool parseVectorArrayCallback(_In_ JSONarray a, _In_ uint32_t ix, _In_ JSONtype t, _In_ JSONvalue v, _Inout_opt_ void* userData)
 {
@@ -120,7 +135,7 @@ static _Success_(return != false) bool parseNodeChildrenArrayCallback(_In_ JSONa
 
 #pragma region Accessor
 
-static enum GLTFaccessor_type parseAccessorType(_In_z_ const char* type)
+static enum GLTFaccessor_type accessorTypeFromString(_In_z_ const char* type)
 {
 	return
 		strcmp(type,"SCALAR")== 0 ? GLTFaccessor_type_SCALAR :
@@ -133,8 +148,9 @@ static enum GLTFaccessor_type parseAccessorType(_In_z_ const char* type)
 		strcmp(type, "MAT3") == 0 ? GLTFaccessor_type_MAT3 :
 		strcmp(type, "MAT4") == 0 ? GLTFaccessor_type_MAT4 :
 
-		GLTFaccessor_type_SCALAR;
+		GLTFaccessor_type_max;
 }
+
 static void parseAccessorMinMax(_In_ uint32_t count, _Out_writes_(min(count, 16)) union GLTFaccessor_minmax* minmax, _In_opt_ JSONarray a, GLenum ctype)
 {
 	if (!a) return;
@@ -216,12 +232,12 @@ static _Success_(return != false) bool parseAccessorArrayCallback(_In_ JSONarray
 
 
 	struct GLTFaccessor acc = {
-		.bufferView = ctx->bufferViews + jsonObjectGetOrElse(o,"bufferView", JVU(uint = 0)).uint,
+		.bufferView = jsonObjectGetType(o, "bufferView") == JSONtype_INTEGER ? ctx->bufferViews + jsonObjectGet(o,"bufferView").uint : NULL,
 		.byteOffset = jsonObjectGetOrElse(o, "byteOffset", JVU(uint = 0)).uint,
 		.componenType = jsonObjectGet(o, "componentType").uint,
 		.normalized = jsonObjectGetOrElse(o, "normalized", JVU(boolean = false)).boolean,
 		.count = jsonObjectGet(o, "count").uint,
-		.type = parseAccessorType(jsonObjectGet(o, "type").string),
+		.type = accessorTypeFromString(jsonObjectGet(o, "type").string),
 		.sparse = parseAccessorSparse(jsonObjectGetOrElse(o, "sparse", JVU(object = NULL)).object, ctx->bufferViews),
 		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", JVU(string = NULL) ).string)
 	};
@@ -229,9 +245,17 @@ static _Success_(return != false) bool parseAccessorArrayCallback(_In_ JSONarray
 	parseAccessorMinMax(minmaxC, acc.max, jsonObjectGetOrElse(o, "max", JVU(array = NULL)).array, acc.componenType);
 	parseAccessorMinMax(minmaxC, acc.min, jsonObjectGetOrElse(o, "min", JVU(array = NULL)).array, acc.componenType);
 
+	
+	assert(enumArrayContains(_countof(ALLOWED_COMP_TYPES), ALLOWED_COMP_TYPES, acc.componenType));
+
+	assert(acc.count > 0);
+
+	assert(acc.type != GLTFaccessor_type_max);
+
+	if (acc.sparse.count > 0)
+		assert(enumArrayContains(_countof(ALLOWED_COMP_TYPES), ALLOWED_COMP_TYPES, acc.sparse.indices_componentType));
+
 	ctx->accessors[ix] = acc;
-
-
 	return true;
 }
 
@@ -246,6 +270,8 @@ static void destroyAccessor(struct GLTFaccessor* pAccessor)
 
 #pragma region Animation
 
+#define DEFAULT_ANIMATION_SAMPLER_INTERPOLATION "LINEAR"
+
 static enum GLTFanimation_sampler_interpolation animationSamplerInterpolationFromString(_In_z_ const char* i)
 {
 	return 
@@ -255,6 +281,7 @@ static enum GLTFanimation_sampler_interpolation animationSamplerInterpolationFro
 		
 		GLTFanimation_sampler_interpolation_max;
 }
+
 struct AnimationSamplerReadCtx
 {
 	struct GLTFanimation_sampler* samplers;
@@ -266,15 +293,17 @@ static _Success_(return != false) bool parseAnimationSamplerCallback(_In_ JSONar
 	struct AnimationSamplerReadCtx* ctx = (struct AnimationSamplerReadCtx*)userData;
 	JSONobject o = v.object;
 
+	assert(jsonObjectGetType(o,  "input") == JSONtype_INTEGER);
+	assert(jsonObjectGetType(o, "output") == JSONtype_INTEGER);
+
 	struct GLTFanimation_sampler sampler = {
 		. input = ctx->accessors + jsonObjectGet(o,  "input").uint,
 		.output = ctx->accessors + jsonObjectGet(o, "output").uint,
 
-		.interpolation = animationSamplerInterpolationFromString(jsonObjectGetOrElse(o, "interpolation", JVU(string = "LINEAR")).string),
+		.interpolation = animationSamplerInterpolationFromString(jsonObjectGetOrElse(o, "interpolation", JVU(string = DEFAULT_ANIMATION_SAMPLER_INTERPOLATION)).string),
 
 	};
 	ctx->samplers[ix] = sampler;
-
 
 	return true;
 }
@@ -290,6 +319,7 @@ static enum GLTFanimation_channel_target_path animationChannelTargetPathFromStri
 
 		GLTFanimation_channel_target_path_max;
 }
+
 struct AnimationChannelReadCtx
 {
 	struct GLTFanimation_channel* channels;
@@ -303,6 +333,8 @@ static _Success_(return != false) bool parseAnimationChannelArrayCallback(_In_ J
 	JSONobject
 		o = v.object,
 		target = jsonObjectGet(o, "target").object;
+	assert(target != NULL);
+	assert(jsonObjectGetType(o, "sampler") == JSONtype_INTEGER);
 
 	struct GLTFanimation_channel c = {
 		.sampler = ctx->samplers + jsonObjectGet(o, "sampler").uint,
@@ -310,8 +342,10 @@ static _Success_(return != false) bool parseAnimationChannelArrayCallback(_In_ J
 		.target_node = jsonObjectGetType(target, "node") == JSONtype_INTEGER ? ctx->nodes + jsonObjectGet(target, "node").uint : NULL,
 		.target_path = animationChannelTargetPathFromString(jsonObjectGet(target, "path").string),
 	};
+	
+	assert(c.target_path != GLTFanimation_channel_target_path_max);
+	
 	ctx->channels[ix] = c;
-
 	return true;
 }
 
@@ -345,7 +379,7 @@ static _Success_(return != false) bool parseAnimationArrayCallback(_In_ JSONarra
 		.samplers = an.samplers, 
 		.accessors = ctx->accessors 
 	};
-	if (jsonArrayForeach(samplers, parseAnimationSamplerCallback, &samplerCtx) != 0)
+	if (jsonArrayForeach(samplers, parseAnimationSamplerCallback, &samplerCtx) == 0)
 	{
 		//parsing failed
 		arrfree(an.samplers);
@@ -357,13 +391,15 @@ static _Success_(return != false) bool parseAnimationArrayCallback(_In_ JSONarra
 		.samplers = an.samplers,
 		.nodes = ctx->nodes,
 	};
-	if (jsonArrayForeach(channels, parseAnimationChannelArrayCallback, &channelCtx) != 0)
+	if (jsonArrayForeach(channels, parseAnimationChannelArrayCallback, &channelCtx) == 0)
 	{
 		//parsing failed!
 		arrfree(an.channels);
 		return false;
 	}
-		
+	
+	assert(arrlenu(an.channels) > 0);
+	assert(arrlenu(an.samplers) > 0);
 
 	ctx->animations[ix] = an;
 	return true;
@@ -412,8 +448,9 @@ static _Success_(return != false) bool parseBufferArrayCallback(_In_ JSONarray a
 		b.uri = copyStringHeap(jsonObjectGet(o, "uri", JVU(string = NULL)).string);
 	}
 
-	ctx->buffers[ix] = b;
+	assert(b.byteLength > 0);
 
+	ctx->buffers[ix] = b;
 	return true;
 }
 
@@ -442,17 +479,26 @@ static _Success_(return != false) bool parseBufferViewArrayCallback(_In_ JSONarr
 	struct BufferViewReadCtx* ctx = (struct BufferViewReadCtx*)userData;
 	JSONobject o = v.object;
 
+	assert(jsonObjectGetType(o, "buffer") == JSONtype_INTEGER);
+
 	struct GLTFbufferView bw = {
-		.buffer = ctx->buffers + jsonObjectGet(o, "buffers").uint,
-		.byteOffset =  jsonObjectGetOrElse(o, "byteOffset", JVU(uint = 0)).uint,
-		.byteLength =  jsonObjectGetOrElse(o, "byteLength", JVU(uint = 0)).uint,
+		.buffer = ctx->buffers + jsonObjectGet(o, "buffer").uint,
+		.byteOffset =  jsonObjectGetOrElse(o, "byteOffset", _JVU(0)).uint,
+		.byteLength =  jsonObjectGet(o, "byteLength").uint,
 		.byteStride =  jsonObjectGetOrElse(o, "byteStride", JVU(uint = 0)).uint,
 		.target =  (GLenum)jsonObjectGetOrElse(o, "target", JVU(uint = 0)).uint,
 		
 		.name = copyStringHeap(jsonObjectGetOrElse(o, "name", JVU(string = 0)).string),		
 	};
-	ctx->bufferViews[ix] = bw;
+	assert(bw.byteLength > 0);
+	
+	if (bw.byteStride != 0)
+		assert(4 <= bw.byteStride && bw.byteStride <= 252);
+	
+	if (bw.target != 0)
+		assert(enumArrayContains(_countof(ALLOWED_BUFFER_VIEW_TARGET), ALLOWED_BUFFER_VIEW_TARGET, bw.target));
 
+	ctx->bufferViews[ix] = bw;
 	return true;
 }
 static void destroyBufferView(struct GLTFbufferView* bw)
@@ -502,7 +548,6 @@ static _Success_(return != false) bool parseCameraArrayCallback(_In_ JSONarray a
 		};
 
 	ctx->cameras[ix] = c;
-
 	return true;
 }
 static void destroyCamera(struct GLTFcamera* c)
@@ -666,7 +711,7 @@ static _Success_(return != false) bool parseMaterialArrayCallback(_In_ JSONarray
 
 		.clearcoatFactor = KHR_materials_clearcoat ? jsonObjectGetOrElse(KHR_materials_clearcoat, "clearcoatFactor", _JVU(0)).number : 0,
 		.clearcoatRoughnessFactor = KHR_materials_clearcoat ? jsonObjectGetOrElse(KHR_materials_clearcoat, "clearcoatRoughnessFactor", _JVU(0)).number : 0,
-		.clearcoatNormalScale = cnt ? jsonObjectGetOrElse(cnt, "scale", JVU(number = DEFAULT_NORMAL_SCALE)).number : DEFAULT_NORMAL_SCALE,
+		.clearcoatNormalScale = cnt ? jsonObjectGetOrElse(cnt, "scale", JVU(number = DEFAULT_NORMAL_SCALE)).number : 0,
 
 		.diffuseTransmissionFactor = KHR_materials_diffuse_transmission ? jsonObjectGetOrElse(KHR_materials_diffuse_transmission, "diffuseTransmissionFactor", _JVU(0)).number : 0,
 		.diffuseTransmissionColorFactor = DEFAULT_DIFFUSE_TRANSMISSION_COLOR_FACTOR,
@@ -677,8 +722,8 @@ static _Success_(return != false) bool parseMaterialArrayCallback(_In_ JSONarray
 
 		.iridescenceFactor = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceFactor", _JVU(0)).number : 0,
 		.iridescenceIor = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceIor", JVU(number = DEFAULT_IRIDESCENCE_IOR)).number : DEFAULT_IRIDESCENCE_IOR,
-		.iridescenceThicknessMinimum = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceThicknessMinimum", JVU(number = DEFAULT_IRIDESCENCE_THICKNESS_MIN)).number : DEFAULT_IRIDESCENCE_THICKNESS_MIN,
-		.iridescenceThicknessMaximum = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceThicknessMaximum", JVU(number = DEFAULT_IRIDESCENCE_THICKNESS_MAX)).number : DEFAULT_IRIDESCENCE_THICKNESS_MAX,
+		.iridescenceThicknessMinimum = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceThicknessMinimum", JVU(number = DEFAULT_IRIDESCENCE_THICKNESS_MIN)).number : 0,
+		.iridescenceThicknessMaximum = KHR_materials_iridescence ? jsonObjectGetOrElse(KHR_materials_iridescence, "iridescenceThicknessMaximum", JVU(number = DEFAULT_IRIDESCENCE_THICKNESS_MAX)).number : 0,
 
 		.sheenColorFactor = DEFAULT_SHEEN_COLOR_FACTOR,
 		.sheenRoughnessFactor = KHR_materials_sheen ? jsonObjectGetOrElse(KHR_materials_sheen, "sheenRoughnessFactor", _JVU(0)).number : 0,
@@ -850,7 +895,7 @@ static _Success_(return != false) bool parseMeshPrimitveArrayCallback(_In_ JSONa
 	struct GLTFmesh_primitive p =
 	{
 		.attributes = NULL,
-		.indices = jsonObjectGetType(o, "indices") == JSONtype_INTEGER ? ctx->accessors + jsonObjectGet(o, "indices").uint : NULL,
+		.indices = jsonObjectGetType(o, "indices") == JSONtype_INTEGER ? ctx->accessors + jsonObjectGet(o,   "indices").uint : NULL,
 		.material= jsonObjectGetType(o, "material")== JSONtype_INTEGER ? ctx->materials + jsonObjectGet(o, "materials").uint : NULL,
 		.targets = NULL,
 		.mode = (GLenum)jsonObjectGetOrElse(o, "mode", _JVU(GL_TRIANGLES)).uint, 
